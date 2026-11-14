@@ -1,7 +1,7 @@
 /* EEG Alma Center · follows the VEATION design system: grey surfaces, Geist, 1 px lines, amber only as a point. */
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; background: var(--s0); color: var(--ink); font-family: var(--font-sans); font-size: 11px; line-height: 16px; letter-spacing: -0.003em; -webkit-font-smoothing: antialiased; user-select: none; }
-body { display: grid; grid-template-rows: 44px 52px 1fr; height: 100vh; overflow: hidden; --fs-1: 11px; --fs-2: 13px; --fs-3: 16px; --fs-hero: 27px; --h-ctl: 26px; --h-row: 32px; --h-action: 40px; }
+body { display: grid; grid-template-rows: 44px 52px 1fr; height: 100vh; overflow: hidden; --fs-1: 11px; --fs-2: 13px; --fs-3: 16px; --fs-hero: 27px; --h-ctl: 26px; --h-row: 32px; --h-action: 40px; --side-w: 360px; }
 .hidden { display: none !important; }
 
 /* header */
@@ -68,7 +68,7 @@ main { min-height: 0; }
 .page { height: 100%; min-height: 0; }
 
 /* ── Home ── */
-.home { display: grid; grid-template-columns: 1fr 400px; height: 100%; }
+.home { display: grid; grid-template-columns: 1fr var(--side-w); height: 100%; }
 .home-face { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px 24px 20px; min-width: 0; min-height: 0; }
 .head-wrap { width: 100%; flex: 1; min-height: 0; position: relative; }
 .head-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
@@ -82,7 +82,7 @@ main { min-height: 0; }
 .contact .row { min-height: 28px; }
 
 /* ── Live ── */
-.live { display: grid; grid-template-columns: 1fr 340px; height: 100%; }
+.live { display: grid; grid-template-columns: 1fr var(--side-w); height: 100%; }
 .live-main { position: relative; display: flex; flex-direction: column; min-width: 0; }
 .subtabs { display: flex; align-items: center; gap: 2px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--s0); }
 .subtab { background: none; color: var(--ink-3); height: 24px; padding: 0 10px; font-weight: 600; }
@@ -147,12 +147,17 @@ main { min-height: 0; }
 .result-row select { flex: 1; min-width: 0; }
 
 /* session bar: the one thing an operator does all day, on every page */
-.session-bar { display: flex; align-items: center; gap: 12px; padding: 0 20px; background: var(--s1); border-bottom: 1px solid var(--line); }
+.session-bar { display: grid; grid-template-columns: 1fr var(--side-w); background: var(--s1); border-bottom: 1px solid var(--line); }
+.sb-left { display: flex; align-items: center; gap: 16px; padding: 0 20px; min-width: 0; }
+.sb-right { display: flex; align-items: center; gap: 8px; padding: 0 20px; border-left: 1px solid var(--line); }
+.sb-right #btnSession { flex: 1; justify-content: center; }
+.session-bar input[type=text], .session-bar button, .session-bar button.action { height: 32px; }
+.session-bar button.action { font-size: var(--fs-2); }
 .sb-field { display: flex; align-items: center; gap: 8px; width: 240px; }
 .sb-field.grow { flex: 1; min-width: 160px; width: auto; }
 .sb-field label { color: var(--ink-3); white-space: nowrap; }
 .sb-clock { font-size: var(--fs-3); font-weight: 600; font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
-.sb-meta { color: var(--ink-3); white-space: nowrap; min-width: 150px; }
+.sb-meta { color: var(--ink-3); white-space: nowrap; }
 .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 1px; margin-right: 8px; vertical-align: 0; background: var(--c, var(--ink-3)); }
 .result-name .swatch { margin-right: 6px; }
 .index-head .swatch { margin-right: 2px; }

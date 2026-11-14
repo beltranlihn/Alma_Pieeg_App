@@ -21,12 +21,16 @@
     <button id="hdrConnect" class="primary">Connect PiEEG</button>
   </header>
   <div class="session-bar">
-    <div class="sb-field"><label for="participant">Participant</label><input type="text" id="participant" placeholder="Name"></div>
-    <div class="sb-field grow"><label for="notes">Notes</label><input type="text" id="notes" placeholder="Piece, condition, anything"></div>
-    <button id="btnSession" class="action primary" disabled>Start session <kbd>R</kbd></button>
-    <button id="btnMark" disabled>Mark <kbd>M</kbd></button>
-    <div class="sb-clock" id="sessionClock"></div>
-    <div class="sb-meta" id="sessionMeta"></div>
+    <div class="sb-left">
+      <div class="sb-field"><label for="participant">Participant</label><input type="text" id="participant" placeholder="Name"></div>
+      <div class="sb-field grow"><label for="notes">Notes</label><input type="text" id="notes" placeholder="Piece, condition, anything"></div>
+      <div class="sb-meta" id="sessionMeta"></div>
+      <div class="sb-clock" id="sessionClock"></div>
+    </div>
+    <div class="sb-right">
+      <button id="btnMark" disabled>Mark <kbd>M</kbd></button>
+      <button id="btnSession" class="action primary" disabled>Start session <kbd>R</kbd></button>
+    </div>
   </div>
   <main>
     <div class="page" id="pageHome"></div>
