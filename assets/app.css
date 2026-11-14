@@ -130,3 +130,15 @@ main { min-height: 0; }
 /* header stripe for a page section */
 .home-side h2:first-of-type, .live-side h2:first-of-type { margin-top: 0; border-top: 0; }
 .rows.contact .v { color: var(--ink-2); }
+
+/* results strip (Live) */
+.results { display: flex; gap: 0; border-bottom: 1px solid var(--line); background: var(--s0); }
+.result { flex: 1; min-width: 0; padding: 10px 16px 8px; border-right: 1px solid var(--line-soft); }
+.result:last-child { border-right: 0; }
+.result-name { color: var(--ink-2); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-name span { color: var(--ink-3); font-weight: 400; margin-left: 8px; }
+.result-value { font-size: 26px; line-height: 30px; font-weight: 600; letter-spacing: -0.8px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.result-time .result-value { color: var(--ink-2); }
+.result-row { gap: 6px; }
+.result-row .k { flex: 0 0 14px; }
+.result-row select { flex: 1; min-width: 0; }

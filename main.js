@@ -71,6 +71,11 @@ ipcMain.handle('save-session', async (_e, name, csvText, metaJson) => {
   if (metaJson) await fs.promises.writeFile(path.join(dir, base + '.json'), metaJson, 'utf8');
   return csvPath;
 });
+ipcMain.handle('save-files', async (_e, name, files) => {
+  const dir = sessionsDir(), base = safeName(name), out = [];
+  for (const [ext, text] of Object.entries(files)) { const p = path.join(dir, base + ext); await fs.promises.writeFile(p, text, 'utf8'); out.push(p); }
+  return out;
+});
 ipcMain.handle('list-sessions', async () => {
   const dir = sessionsDir();
   const names = (await fs.promises.readdir(dir)).filter((n) => n.endsWith('.csv'));

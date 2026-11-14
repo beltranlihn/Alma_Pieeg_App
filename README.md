@@ -4,7 +4,7 @@ Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and 
 face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
 *Soul Charger* VR experience, but meant to send anything to anything: OSC, WebSocket, files.
 
-Status: **0.3**: Home (3D head cut at the neck, electrode pads coloured by contact), Live (waves, bands, spectrum, indices), Routing (generic OSC: any host, port, address, type), heart rate from ANT+ straps through the USB stick (Latido Común hardware) and from Bluetooth straps, sessions. UX notes in `docs/UX.md`. Roadmap in
+Status: **0.4**: sessions with participant and notes, three files per session (raw, features at 10 Hz, summary), live results (signal × method: change vs start, mean, now, peak, time above) shown large and sent as `result1–3`. Previously **0.3**: Home (3D head cut at the neck, electrode pads coloured by contact), Live (waves, bands, spectrum, indices), Routing (generic OSC: any host, port, address, type), heart rate from ANT+ straps through the USB stick (Latido Común hardware) and from Bluetooth straps, sessions. UX notes in `docs/UX.md`. Roadmap in
 `VR Unreal/docs/EEG-ALMA-CENTER-INVESTIGACION-Y-PLAN.md` (§8).
 
 ## Run
@@ -22,9 +22,12 @@ npm run dist           # Windows installer + portable exe in dist/
 1. Power the PiEEG box **from a battery or from the headset** (never from a mains-powered PC while someone wears it).
 2. Put the mask on, press **Connect PiEEG**. The host picks the first `PiEEG_XR` / IronBCI it sees.
 3. Watch **Contact**: every channel should be green within a second. Grey = no contact, red = hum or railed (reference lost).
-4. **Record** (or `R`), drop marks with `M`, **Stop & save**. Sessions land in `Documents/EEG Alma Center/sessions/` as
-   `name_YYYYMMDD_HHMMSS.csv` (`timestamp, ch1..ch8` raw µV, `mark`) plus a `.json` sidecar. The CSV layout matches
-   PiEEG's recordings, so PiEEG Studio (MNE-Python) opens them.
+4. On **Live**, type the participant's name, **Start session** (or `R`), drop marks with `M`, **End session**. Three files land in
+   `Documents/EEG Alma Center/sessions/` as `name_YYYYMMDD_HHMMSS.raw.csv` (`timestamp, ch1..ch8` raw µV, `mark`; PiEEG's
+   layout, so PiEEG Studio opens it), `.features.csv` (one row per 100 ms: bands, indices, blinks, heart, contact) and
+   `.summary.json` (participant, notes, duration, per-signal mean / start / end / min / max, the results).
+5. **Results**: pick up to three (signal × method). *Change* compares the last 30 s with the first 30 s (±%), *Average*, *Now*,
+   *Best 10 s* and *Time above 60* read 0–100. They show large above the Live views and go out by OSC as `result1`–`result3`.
 
 **Heart rate:** plug the Garmin ANT+ USB stick (WinUSB driver, as for Latido Común), press *Start ANT+ stick* on Home, put a strap on: it appears with its id; give it a slot. Slot 1 is the main heart (`heart.*` signals); every slot has `strapN.bpm` / `strapN.beat`.
 
@@ -51,6 +54,7 @@ Design follows the VEATION design system (`assets/tokens.css`, Geist): grey surf
 | `src/signals.js`, `src/router.js`, `osc-encode.js` | the signal catalogue, the OSC router and the encoder |
 | `src/heart.js` | heart rate over the standard Bluetooth Heart Rate service |
 | `ant.js` | ANT+ heart-rate straps through a Garmin USB stick (main process, `ant-plus-next`); straps get slots 1–8 |
+| `src/session.js` | session log at 10 Hz, result methods, features CSV and summary JSON |
 | `src/pages/*.js` | Home, Live, Routing |
 | `src/app.js` | wiring, config persistence (userData/config.json) |
 

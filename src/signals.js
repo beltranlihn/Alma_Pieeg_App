@@ -22,6 +22,9 @@ for (let s = 1; s <= 8; s++) { add(`strap${s}.bpm`, `Strap ${s} · bpm`, 'Heart 
 add('heart.beat', 'Heart · beat pulse (1 for 150 ms)', 'Heart', '0/1', [0, 1], (f) => f.heart.beat, 'event');
 add('heart.rmssd', 'Heart · HRV (RMSSD, last minute)', 'Heart', 'ms', [0, 150], (f) => f.heart.rmssd);
 add('heart.connected', 'Heart · device connected (1/0)', 'Heart', '0/1', [0, 1], (f) => f.heart.connected, 'event');
+for (let k = 1; k <= 3; k++) add(`result${k}`, `Result ${k} · as configured in Live`, 'Session results', '', [-100, 100], (f) => f.result[k - 1]);
+add('session.elapsed', 'Session · elapsed seconds', 'Session results', 's', [0, 1800], (f) => f.sessionElapsed);
+add('session.active', 'Session · running (1/0)', 'Session results', '0/1', [0, 1], (f) => f.sessionActive, 'event');
 add('contact.ok', 'Contact · all channels good (1/0)', 'Contact', '0/1', [0, 1], (f) => f.contactOk, 'event');
 add('contact.good', 'Contact · channels good', 'Contact', 'n', [0, CHANNELS], (f) => f.contactGood);
 add('stream.rate', 'Stream · samples per second', 'Contact', '/s', [0, 300], (f) => f.rate);

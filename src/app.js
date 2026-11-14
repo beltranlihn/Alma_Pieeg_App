@@ -49,6 +49,7 @@ refreshHeader();
 
 const flags = window.alma.flags || {};
 show(flags.page || ui.page || 'home');
+if (flags.sim && flags.session) setTimeout(() => { engine.startSession('test-person', 'self-test'); setTimeout(() => engine.endSession(), +flags.session * 1000); }, 2500);
 if (flags.sim) {
   setTimeout(() => engine.connect('sim'), 300);
   if (flags.events) setTimeout(() => { engine.device?.trigger?.('blink'); setTimeout(() => engine.device?.trigger?.('blink'), 900); setTimeout(() => engine.device?.trigger?.('blink'), 1800); setTimeout(() => engine.device?.trigger?.('jaw'), 3000); setTimeout(() => engine.device?.trigger?.('left'), 4500); }, 2500);

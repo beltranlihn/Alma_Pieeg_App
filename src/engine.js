@@ -9,6 +9,8 @@ import { FFT, BANDS } from './fft.js';
 import { BlinkDetector, envelope, rms } from './detect.js';
 import { INDICES, rawIndices, RollingNorm } from './indices.js';
 import { HeartDevice, SimHeart } from './heart.js';
+import { Session } from './session.js';
+import { SIGNAL_BY_ID } from './signals.js';
 
 export const FOREHEAD = [2, 3, 4, 5];
 
@@ -22,6 +24,8 @@ export class Engine extends EventTarget {
     this.clock = new SampleClock(this.fs);
     this.chains = Array.from({ length: CHANNELS }, () => new ChannelChain(this.fs));
     this.recorder = new Recorder();
+    this.session = new Session();
+    setInterval(() => { if (this.session.active && this.state === 'streaming') { this.session.log(this.features, SIGNAL_BY_ID); for (let k = 0; k < 3; k++) this.features.result[k] = this.session.live[k] || 0; this.features.sessionElapsed = this.session.seconds; this._emit('session'); } }, 100);
     this.fft = new FFT(256, this.fs);
     this.blink = new BlinkDetector(this.fs, FOREHEAD);
     this.norms = Object.fromEntries(INDICES.map((i) => [i.id, new RollingNorm(60, 10)]));
@@ -56,6 +60,7 @@ export class Engine extends EventTarget {
       idxNorm: Object.fromEntries(INDICES.map((i) => [i.id, 0.5])), // 0–1 against the last minute
       heart: { bpm: 0, rmssd: 0, beat: 0, connected: 0 },
       strap: Array.from({ length: 9 }, () => ({ bpm: 0, beat: 0, rmssd: 0, on: 0 })),   // index = slot, 0 unused
+      result: [0, 0, 0], sessionElapsed: 0, sessionActive: 0,
     };
   }
 
@@ -202,6 +207,26 @@ export class Engine extends EventTarget {
     if (dt >= 1) { this._rate.value = this._rate.samples / dt; this._rate.samples = 0; this._rate.t0 = now; }
     this.features.rate = this._rate.value;
     this._emit('quality');
+  }
+
+  // ── Session (participant + results + files) ────────────────────────────
+  startSession(participant, notes) {
+    this.session.start(participant, notes); this.features.sessionActive = 1; this.features.result = [0, 0, 0];
+    this.recorder.start(); this._emit('recording'); this._emit('session');
+  }
+  async endSession() {
+    const summary = this.session.end(SIGNAL_BY_ID); this.features.sessionActive = 0;
+    this.recorder.stop(); this._emit('recording');
+    const d = new Date(this.session.startedAt), pad = (n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    const who = (this.session.participant || 'session').trim().replace(/[^A-Za-z0-9._-]+/g, '-');
+    const name = `${who}_${stamp}`;
+    const meta = JSON.parse(this.recorder.toMeta({ device: this.deviceName, sample_rate: this.fs, filters: { ...this.filters }, contact_at_end: this.quality }));
+    const files = { '.raw.csv': this.recorder.toCSV(), '.features.csv': this.session.featuresCSV(), '.summary.json': JSON.stringify({ ...summary, device: this.deviceName, sample_rate: this.fs, filters: { ...this.filters }, marks: meta.marks, raw_samples: meta.samples }, null, 2) };
+    let paths = [];
+    try { paths = await window.alma.saveFiles(name, files); } catch (e) { this._emit('error', e); }
+    this._emit('session'); this._emit('saved', { name, path: paths[0] || '', paths });
+    return { name, paths, summary };
   }
 
   // ── Recording ──────────────────────────────────────────────────────────────

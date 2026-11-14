@@ -46,13 +46,13 @@ function clipAtPlane(geo, cutY) {
       out.push(a, b, bc, a, bc, ac); edge.push([bc, ac]);
     }
   }
-  if (edge.length) {      // cap: fan from the centroid of the cut loop, facing down
+  const cap = [];
+  if (edge.length) {      // cap: fan from the centroid of the cut loop, facing down; its own geometry so the edge stays hard
     const centre = new THREE.Vector3(); edge.forEach(([a, b]) => { centre.add(a); centre.add(b); }); centre.divideScalar(edge.length * 2); centre.y = cutY;
-    for (const [a, b] of edge) out.push(centre.clone(), b.clone(), a.clone());
+    for (const [a, b] of edge) cap.push(centre.clone(), b.clone(), a.clone());
   }
-  const arr = new Float32Array(out.length * 3); out.forEach((v, i) => v.toArray(arr, i * 3));
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-  return g;
+  const toGeo = (list) => { const arr = new Float32Array(list.length * 3); list.forEach((v, i) => v.toArray(arr, i * 3)); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(arr, 3)); return g; };
+  return { body: toGeo(out), cap: toGeo(cap) };
 }
 
 export class HeadView {
@@ -91,7 +91,10 @@ export class HeadView {
     const box = new THREE.Box3().setFromBufferAttribute(geo.attributes.position);
     const center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()), s = 2 / size.y;
     geo.translate(-center.x, -center.y, -center.z); geo.scale(s, s, s);
-    geo = mergeVertices(clipAtPlane(geo, CUT_Y), 1e-4); geo.computeVertexNormals();   // merge → smooth shading again
+    const cut = clipAtPlane(geo, CUT_Y);
+    geo = mergeVertices(cut.body, 1e-4); geo.computeVertexNormals();                  // smooth skin
+    const capGeo = cut.cap; capGeo.computeVertexNormals();                             // flat base, hard edge
+    this.scene.add(new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: SKIN.clone().multiplyScalar(0.85), roughness: 0.9, metalness: 0 })));
     const n = geo.attributes.position.count;
     this.colors = new Float32Array(n * 3); for (let i = 0; i < n; i++) SKIN.toArray(this.colors, i * 3);
     geo.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
@@ -107,18 +110,20 @@ export class HeadView {
       const hit = ray.intersectObject(this.head, false)[0];
       return hit ? { p: hit.point.clone(), n: hit.face.normal.clone().normalize() } : { p: origin.multiplyScalar(0.25), n: v };
     };
-    const padGeo = new THREE.CylinderGeometry(0.03, 0.033, 0.012, 40);
-    padGeo.rotateX(Math.PI / 2);                 // axis along +Z so lookAt orients it on the skin
-    const ringGeo = new THREE.TorusGeometry(0.036, 0.0045, 12, 48);
+    // a turned pad: flat base on the skin, bevelled rim, shallow dome with a centre dimple (profile in x = radius, y = height)
+    const profile = [[0, 0], [0.026, 0], [0.028, 0.0035], [0.026, 0.009], [0.019, 0.011], [0.009, 0.0118], [0.004, 0.0095], [0, 0.009]].map(([r, h]) => new THREE.Vector2(r, h));
+    const padGeo = new THREE.LatheGeometry(profile, 56); padGeo.rotateX(Math.PI / 2);   // axis along +Z so lookAt lays it on the skin
+    const ringGeo = new THREE.TorusGeometry(0.0295, 0.0022, 10, 56);
     this.points = [];
     DIRS.map(place).forEach(({ p, n: nrm }) => {
       this.points.push(p);
-      const pad = new THREE.Mesh(padGeo, new THREE.MeshStandardMaterial({ color: 0xcfcfcf, roughness: 0.45, metalness: 0.25 }));
+      const pad = new THREE.Mesh(padGeo, new THREE.MeshStandardMaterial({ color: 0x6d6d6d, emissive: 0x000000, roughness: 0.4, metalness: 0.15 }));
       pad.position.copy(p).add(nrm.clone().multiplyScalar(0.006)); pad.lookAt(pad.position.clone().add(nrm)); this.scene.add(pad); this.pads.push(pad);
-      const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x4a4a4a }));
-      ring.position.copy(pad.position).add(nrm.clone().multiplyScalar(0.006)); ring.lookAt(ring.position.clone().add(nrm)); this.scene.add(ring); this.rings.push(ring);
+      const ring = new THREE.Mesh(ringGeo, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }));
+      ring.position.copy(pad.position).add(nrm.clone().multiplyScalar(0.004)); ring.lookAt(ring.position.clone().add(nrm)); this.scene.add(ring); this.rings.push(ring);
     });
-    const auxGeo = new THREE.CylinderGeometry(0.018, 0.02, 0.01, 32); auxGeo.rotateX(Math.PI / 2);
+    const auxProfile = [[0, 0], [0.016, 0], [0.018, 0.0025], [0.015, 0.0065], [0.006, 0.0078], [0, 0.0072]].map(([r, h]) => new THREE.Vector2(r, h));
+    const auxGeo = new THREE.LatheGeometry(auxProfile, 40); auxGeo.rotateX(Math.PI / 2);
     AUX.map(place).forEach(({ p, n: nrm }) => {
       const pad = new THREE.Mesh(auxGeo, new THREE.MeshStandardMaterial({ color: 0x8c8c8c, roughness: 0.4, metalness: 0.6 }));
       pad.position.copy(p).add(nrm.clone().multiplyScalar(0.005)); pad.lookAt(pad.position.clone().add(nrm)); this.scene.add(pad);
@@ -141,7 +146,7 @@ export class HeadView {
       if (this.mode === 'contact') { const st = quality ? quality[i].status : 'wait'; c = STATUS_COLOR[st] ? new THREE.Color(STATUS_COLOR[st]) : null; }
       else c = this._ramp(Math.max(0, Math.min(1, this.values[i])));
       cols.push(c);
-      this.rings[i].material.color.set(c || new THREE.Color(0x4a4a4a));
+      const pc = c || new THREE.Color(0x6d6d6d); this.pads[i].material.color.set(pc); this.pads[i].material.emissive.set(c ? c.clone().multiplyScalar(0.25) : 0x000000);
     }
     // skin: a soft glow of each electrode's colour around its pad
     const pos = this.positions, n = pos.length / 3, sigma = 0.10, tmp = new THREE.Color();
