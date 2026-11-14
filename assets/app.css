@@ -73,6 +73,7 @@ main { min-height: 0; }
 .head-wrap { width: 100%; flex: 1; min-height: 0; position: relative; }
 .head-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
 .head-tools { display: flex; align-items: center; gap: 12px; }
+.head-tools .seg-group .seg { padding: 0 8px; }
 .head-tools .hint { padding: 0; }
 .home-status { display: flex; align-items: center; gap: 10px; font-size: var(--fs-3); font-weight: 600; letter-spacing: -0.012em; color: var(--ink); }
 .home-actions { display: flex; gap: 8px; }

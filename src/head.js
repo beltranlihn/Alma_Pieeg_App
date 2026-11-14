@@ -24,7 +24,10 @@ const CUT_Y = -0.40;                                           // neck plane (he
 const EYE_LINE = 0.18;
 const STATUS_COLOR = { good: '#4a8d6f', fair: '#e5b567', poor: '#e06c6c', railed: '#e06c6c', none: '#6d6d6d', wait: null };
 const SKIN = new THREE.Color('#4b4b4b');
-const C_LO = new THREE.Color('#2a2a2a'), C_MID = new THREE.Color('#e5b567'), C_HI = new THREE.Color('#ffffff');
+// heat LUT for activity (0 → 1): skin grey → blue → cyan → green → yellow → red → white, like a topomap
+const LUT_STOPS = ['#3a3f47', '#2f5f9e', '#4fc3e8', '#4a8d6f', '#e8c84b', '#e0645c', '#ffffff'].map((c) => new THREE.Color(c));
+function lut(t) { t = Math.max(0, Math.min(0.9999, t)) * (LUT_STOPS.length - 1); const i = Math.floor(t); return LUT_STOPS[i].clone().lerp(LUT_STOPS[i + 1], t - i); }
+const MASK_RADIUS = 0.55;    // how far from an electrode the activity map reaches before fading to skin
 
 const dirVec = ({ az, el }) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)); };
 
@@ -137,9 +140,10 @@ export class HeadView {
     this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
   }
 
-  /** Repaint from contact quality (mode 'contact') or from this.values (mode 'value'). */
+  /** Repaint from contact quality (mode 'contact') or from this.values (mode 'value': 0–1 per channel, interpolated). */
   update(quality) {
     this.quality = quality; if (!this.ready) return;
+    if (this.mode === 'value') return this._paintActivity();
     const cols = [];
     for (let i = 0; i < 8; i++) {
       let c = null;
@@ -164,7 +168,27 @@ export class HeadView {
     }
     this.head.geometry.attributes.color.needsUpdate = true;
   }
-  _ramp(t) { return t < 0.5 ? C_LO.clone().lerp(C_MID, t * 2) : C_MID.clone().lerp(C_HI, (t - 0.5) * 2); }
+  _paintActivity() {
+    const vals = this.values, pos = this.positions, n = pos.length / 3, tmp = new THREE.Color();
+    if (this._lowY === undefined) this._lowY = Math.min(...this.points.map((p) => p.y));
+    for (let i = 0; i < 8; i++) { const c = lut(vals[i]); this.pads[i].material.color.set(c); this.pads[i].material.emissive.set(c.clone().multiplyScalar(0.3)); }
+    for (let v = 0; v < n; v++) {
+      const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
+      let wsum = 0, acc = 0, near = Infinity;
+      for (let i = 0; i < 8; i++) {
+        const p = this.points[i], dx = x - p.x, dy = y - p.y, dz = z - p.z, d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < near) near = d2;
+        const w = 1 / (d2 + 0.0015);                       // inverse distance squared, softened at the electrode
+        wsum += w; acc += w * vals[i];
+      }
+      const d = Math.sqrt(near), fade = Math.max(0, Math.min(1, (y - (this._lowY - 0.10)) / 0.14));   // scalp, forehead and temples only: fades out just below the lowest electrode
+      const a = fade * (d < MASK_RADIUS * 0.6 ? 1 : Math.max(0, 1 - (d - MASK_RADIUS * 0.6) / (MASK_RADIUS * 0.4)));
+      if (a <= 0) { this.colors[v * 3] = SKIN.r; this.colors[v * 3 + 1] = SKIN.g; this.colors[v * 3 + 2] = SKIN.b; continue; }
+      tmp.copy(lut(acc / wsum));
+      this.colors[v * 3] = SKIN.r + (tmp.r - SKIN.r) * a; this.colors[v * 3 + 1] = SKIN.g + (tmp.g - SKIN.g) * a; this.colors[v * 3 + 2] = SKIN.b + (tmp.b - SKIN.b) * a;
+    }
+    this.head.geometry.attributes.color.needsUpdate = true;
+  }
   resetView() { this.camera.position.set(0.3, 0.55, 3.4); this.controls.target.set(0, 0.4, 0); this.controls.update(); }
   _frame() { if (this.ready && this.container.isConnected && this.container.offsetParent !== null) { this.controls.update(); this.renderer.render(this.scene, this.camera); } requestAnimationFrame(this._frame); }
 }

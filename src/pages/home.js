@@ -3,6 +3,7 @@ import { HeadView } from '../head.js';
 import { CHANNELS } from '../ble.js';
 import { STATUS } from '../quality.js';
 import { XR_FACE } from '../scope.js';
+import { BANDS } from '../fft.js';
 
 const STATUS_LABEL = { good: 'good', fair: 'fair', poor: 'poor', railed: 'railed · reference lost', none: 'no contact', wait: '…' };
 const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '' };
@@ -11,7 +12,7 @@ export function mountHome(root, { engine, ui }) {
   root.innerHTML = `
     <section class="home">
       <div class="home-face">
-        <div class="head-wrap" id="homeFace"></div><div class="head-tools"><span class="hint">Drag to turn the head</span><button class="seg" id="homeResetView">Reset view</button></div>
+        <div class="head-wrap" id="homeFace"></div><div class="head-tools"><div class="seg-group" id="headMode"><button class="seg on" data-v="contact">Contact</button>${BANDS.map((b) => `<button class="seg" data-v="${b.id}">${b.label}</button>`).join('')}<button class="seg" data-v="total">Activity</button></div><button class="seg" id="homeResetView">Reset view</button></div>
         <div class="home-status"><div class="dot" id="homeDot"></div><div id="homeText">No device</div></div>
         <div class="home-actions">
           <button class="primary" id="homeConnect">Connect PiEEG</button>
@@ -44,6 +45,19 @@ export function mountHome(root, { engine, ui }) {
 
   const $ = (id) => root.querySelector('#' + id);
   const face = new HeadView($('homeFace'));
+  let headMode = ui.headMode || 'contact';
+  const smooth = new Float32Array(8);
+  $('headMode').querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.v === headMode); b.addEventListener('click', () => { headMode = b.dataset.v; ui.headMode = headMode; $('headMode').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); face.mode = headMode === 'contact' ? 'contact' : 'value'; face.update(engine.quality); }); });
+  face.mode = headMode === 'contact' ? 'contact' : 'value';
+  // activity: log band power per channel, scaled between the quietest and the loudest channel right now, smoothed
+  setInterval(() => {
+    if (headMode === 'contact' || engine.state !== 'streaming' || root.classList.contains('hidden')) return;
+    const f = engine.features, raw = new Float32Array(8);
+    for (let ch = 0; ch < 8; ch++) { const b = f.bands[ch]; raw[ch] = Math.log10((headMode === 'total' ? b.total : b[headMode]) + 1e-6); }
+    const lo = Math.min(...raw), hi = Math.max(...raw), span = Math.max(0.3, hi - lo);
+    for (let ch = 0; ch < 8; ch++) { const t = (raw[ch] - lo) / span; smooth[ch] += (t - smooth[ch]) * 0.25; face.values[ch] = smooth[ch]; }
+    face.update(engine.quality);
+  }, 150);
   $('homeResetView').addEventListener('click', () => face.resetView());
 
   const CHECKS = [
