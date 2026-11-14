@@ -26,14 +26,17 @@ export function mountHome(root, { engine, ui }) {
         <h2>Contact</h2>
         <div class="rows contact" id="homeContact"></div>
         <div class="hint" id="homeContactSummary"></div>
+        <h2>Heart rate <button class="seg" id="antBtn">Start ANT+ stick</button></h2>
+        <div class="rows" id="straps"></div>
+        <div class="hint" id="antHint"></div>
+        <div class="rows"><div class="row"><div class="k">Bluetooth strap or watch</div><div class="v"><button class="seg" id="hHeartBtn">Connect</button></div></div></div>
+
         <h2>Stream</h2>
         <div class="rows">
           <div class="row"><div class="k">Device</div><div class="v" id="hDevice">—</div></div>
           <div class="row"><div class="k">Samples per second</div><div class="v" id="hRate">—</div></div>
           <div class="row"><div class="k">Packets</div><div class="v" id="hPackets">—</div></div>
           <div class="row"><div class="k">Streaming for</div><div class="v" id="hUptime">—</div></div>
-          <div class="row"><div class="k">Heart rate</div><div class="v" id="hHeart">—</div></div>
-          <div class="row"><div class="k"></div><div class="v"><button class="seg" id="hHeartBtn">Connect heart-rate strap</button></div></div>
           <div class="row"><div class="k">Sessions folder</div><div class="v"><button class="seg" id="hFolder">Open</button></div></div>
         </div>
       </div>
@@ -89,14 +92,35 @@ export function mountHome(root, { engine, ui }) {
     $('hRate').textContent = streaming ? `${engine.features.rate.toFixed(0)} /s` : '—';
     $('hPackets').textContent = streaming ? `${engine.stats.notifications} · ${engine.stats.lastLen} B` : '—';
     $('hUptime').textContent = streaming ? fmtDuration((Date.now() - engine.startedAt) / 1000) : '—';
-    const hb = engine.heart; $('hHeart').textContent = hb && hb.connected ? `${hb.bpm || '—'} bpm · ${hb.name}` : 'not connected';
-    $('hHeartBtn').textContent = hb && hb.connected ? 'Disconnect heart' : 'Connect heart-rate strap';
+    const hb = engine.heart; $('hHeartBtn').textContent = hb && hb.connected ? `${hb.bpm || '—'} bpm · ${hb.name} · disconnect` : 'Connect';
+    renderStraps();
   }
   $('homeConnect').addEventListener('click', () => engine.connect('ble'));
   $('homeSim').addEventListener('click', () => engine.connect('sim'));
   $('homeDisconnect').addEventListener('click', () => engine.disconnect());
   $('hFolder').addEventListener('click', () => window.alma.openSessionsFolder());
   $('hHeartBtn').addEventListener('click', () => (engine.heart && engine.heart.connected ? engine.disconnectHeart() : engine.connectHeart('ble')));
+  $('antBtn').addEventListener('click', () => (engine.ant.state === 'open' || engine.ant.state === 'opening' ? engine.antStop() : engine.antStart()));
+  function renderStraps() {
+    const el = $('straps'); const st = engine.ant.state;
+    $('antBtn').textContent = st === 'open' || st === 'opening' ? 'Stop ANT+ stick' : 'Start ANT+ stick';
+    const straps = [...engine.straps.values()].sort((a, b) => a.firstSeen - b.firstSeen);
+    $('antHint').textContent = st === 'open' ? (straps.length ? 'Give each strap a slot. Slot 1 is the main heart.' : 'Listening. Put a strap on; it shows up here within seconds.') : st === 'idle' ? 'Garmin ANT+ USB stick with chest or wrist straps.' : engine.ant.message || '';
+    const key = straps.map((s) => s.id).join(',') + '|' + JSON.stringify(engine.strapSlots);
+    if (el.dataset.key !== key) {
+      el.dataset.key = key; el.innerHTML = '';
+      for (const s of straps) {
+        const row = document.createElement('div'); row.className = 'row';
+        row.innerHTML = `<div class="dot"></div><div class="k"><b>${s.id}</b></div><div class="v bpm"></div><select class="slot" style="width:92px"><option value="">no slot</option>${[1,2,3,4,5,6,7,8].map((n) => `<option value="${n}">slot ${n}</option>`).join('')}</select>`;
+        const sel = row.querySelector('select'); sel.value = engine.slotOf(s.id) || '';
+        sel.addEventListener('change', () => engine.assignStrap(+sel.value || 0, sel.value ? s.id : null));
+        el.appendChild(row);
+      }
+    }
+    const now = Date.now();
+    straps.forEach((s, i) => { const row = el.children[i]; if (!row) return; const alive = now - s.lastSeen < 8000; row.children[0].className = 'dot ' + (alive ? 'on' : ''); row.querySelector('.bpm').textContent = alive ? `${s.bpm} bpm` : 'lost'; });
+  }
+  engine.addEventListener('ant', refresh); engine.addEventListener('strap', renderStraps);
   for (const ev of ['state', 'quality', 'blink', 'disconnected', 'heart']) engine.addEventListener(ev, refresh);
   const timer = setInterval(refresh, 1000);
   refresh();

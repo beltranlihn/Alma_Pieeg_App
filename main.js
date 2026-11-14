@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const dgram = require('dgram');
 const { encode } = require('./osc-encode.js');
+const ant = require('./ant.js');
 
 let win = null;
 let pendingBleCallback = null;   // Chromium re-emits select-bluetooth-device as devices appear
@@ -97,6 +98,12 @@ ipcMain.on('osc-send', (_e, messages) => {
   }
 });
 ipcMain.handle('osc-stats', () => ({ ...oscStats }));
+
+// ── IPC: ANT+ straps ──────────────────────────────────────────────────────────
+ipcMain.handle('ant-start', async () => ant.start());
+ipcMain.handle('ant-stop', () => ant.stop());
+ipcMain.handle('ant-status', () => ant.getStatus());
+ant.onEvent((type, payload) => { if (win && !win.isDestroyed()) win.webContents.send('ant-event', { type, payload }); });
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());

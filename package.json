@@ -1,7 +1,7 @@
 {
   "name": "eeg-alma-center",
   "productName": "EEG Alma Center",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "EEG Alma Center — receive, clean, calibrate, visualize and route biosignals (PiEEG XR first) · Alma Digital Studio",
   "author": "Alma Digital Studio",
   "license": "MIT",
@@ -21,7 +21,9 @@
     "copyright": "Copyright © 2026 Alma Digital Studio",
     "publish": null,
     "npmRebuild": false,
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "files": [
       "main.js",
       "preload.js",
@@ -31,12 +33,21 @@
       "package.json"
     ],
     "win": {
-      "target": [ "nsis", "portable" ],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "artifactName": "EEG-Alma-Center-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "asarUnpack": [
+      "node_modules/usb/**"
+    ]
+  },
+  "dependencies": {
+    "ant-plus-next": "^0.4.0"
   }
 }

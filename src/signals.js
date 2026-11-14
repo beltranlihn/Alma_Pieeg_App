@@ -18,6 +18,7 @@ add('blink.pulse', 'Blink · pulse (1 for 150 ms)', 'Events', '0/1', [0, 1], (f)
 add('blink.count', 'Blink · count this session', 'Events', 'n', [0, 1000], (f) => f.blinkCount, 'event');
 add('blink.amplitude', 'Blink · frontal peak-to-peak', 'Events', 'µV', [0, 400], (f) => f.blinkAmp);
 add('heart.bpm', 'Heart · beats per minute', 'Heart', 'bpm', [40, 140], (f) => f.heart.bpm);
+for (let s = 1; s <= 8; s++) { add(`strap${s}.bpm`, `Strap ${s} · bpm`, 'Heart straps (ANT+)', 'bpm', [40, 140], (f) => f.strap[s].bpm); add(`strap${s}.beat`, `Strap ${s} · beat pulse`, 'Heart straps (ANT+)', '0/1', [0, 1], (f) => f.strap[s].beat, 'event'); add(`strap${s}.on`, `Strap ${s} · present (1/0)`, 'Heart straps (ANT+)', '0/1', [0, 1], (f) => f.strap[s].on, 'event'); }
 add('heart.beat', 'Heart · beat pulse (1 for 150 ms)', 'Heart', '0/1', [0, 1], (f) => f.heart.beat, 'event');
 add('heart.rmssd', 'Heart · HRV (RMSSD, last minute)', 'Heart', 'ms', [0, 150], (f) => f.heart.rmssd);
 add('heart.connected', 'Heart · device connected (1/0)', 'Heart', '0/1', [0, 1], (f) => f.heart.connected, 'event');
@@ -34,32 +35,6 @@ for (let ch = 0; ch < CHANNELS; ch++) for (const b of BANDS) add(`ch${ch + 1}.${
 export const SIGNAL_BY_ID = Object.fromEntries(SIGNALS.map((s) => [s.id, s]));
 export const SIGNAL_GROUPS = [...new Set(SIGNALS.map((s) => s.group))];
 
-// ── Presets ────────────────────────────────────────────────────────────────
-export const PRESETS = [
-  {
-    id: 'biohub', name: 'Soul Charger · BP_BioHub (Quest)',
-    destination: { name: 'Quest · BioHub', host: '192.168.0.100', port: 10000, rate: 20 },
-    mappings: [
-      { signal: 'idx.calm', address: '/muse/calm', type: 'f', outMin: 0, outMax: 1, smooth: 0.6 },
-      { signal: 'rel.alpha', address: '/muse/alpha', type: 'f', outMin: 0, outMax: 1, smooth: 0.5 },
-      { signal: 'contact.ok', address: '/muse/sensor_active', type: 'i', outMin: 0, outMax: 1, smooth: 0 },
-      { signal: 'heart.bpm', address: '/muse/heart_rate', type: 'f', outMin: 40, outMax: 140, smooth: 0 },
-      { signal: 'blink.pulse', address: '/muse/blink', type: 'i', outMin: 0, outMax: 1, smooth: 0 },
-    ],
-  },
-  {
-    id: 'touchdesigner', name: 'TouchDesigner · /pieeg/*',
-    destination: { name: 'TouchDesigner', host: '127.0.0.1', port: 7000, rate: 15 },
-    mappings: [
-      ...BANDS.map((b) => ({ signal: `rel.${b.id}`, address: `/pieeg/${b.id}`, type: 'f', outMin: 0, outMax: 1, smooth: 0.3 })),
-      { signal: 'idx.relax', address: '/pieeg/relax', type: 'f', outMin: 0, outMax: 1, smooth: 0.5 },
-      { signal: 'blink.pulse', address: '/pieeg/blink', type: 'i', outMin: 0, outMax: 1, smooth: 0 },
-      { signal: 'dominant', address: '/pieeg/dominant', type: 'f', outMin: 0, outMax: 40, smooth: 0.3 },
-    ],
-  },
-  {
-    id: 'vrchat', name: 'VRChat · avatar parameters',
-    destination: { name: 'VRChat', host: '127.0.0.1', port: 9000, rate: 10 },
-    mappings: BANDS.map((b) => ({ signal: `rel.${b.id}`, address: `/avatar/parameters/EEG_${b.id[0].toUpperCase()}${b.id.slice(1)}`, type: 'f', outMin: 0, outMax: 1, smooth: 0.4 })),
-  },
-];
+// Presets were removed: OSC is generic (name, host, port, type). Keep the Soul Charger addresses here as
+// the reference contract the BioHub expects: /muse/calm, /muse/alpha, /muse/sensor_active, /muse/heart_rate on UDP 10000.
+export const PRESETS = [];

@@ -12,6 +12,8 @@ import { HeartDevice, SimHeart } from './heart.js';
 
 export const FOREHEAD = [2, 3, 4, 5];
 
+function rmssdOf(rr) { if (rr.length < 3) return 0; let s = 0; for (let k = 1; k < rr.length; k++) { const d = rr[k].rr - rr[k - 1].rr; s += d * d; } return Math.sqrt(s / (rr.length - 1)); }
+
 export class Engine extends EventTarget {
   constructor() {
     super();
@@ -25,6 +27,10 @@ export class Engine extends EventTarget {
     this.norms = Object.fromEntries(INDICES.map((i) => [i.id, new RollingNorm(60, 10)]));
     this.device = null;
     this.heart = null;
+    this.straps = new Map();          // ANT+ id → { id, bpm, rr: [], lastBeat, lastSeen, beatCount, rssi }
+    this.strapSlots = {};             // slot (1..8) → ANT+ id, persisted
+    this.ant = { state: 'idle', message: '' };
+    if (window.alma.onAnt) window.alma.onAnt((ev) => this._onAnt(ev));
     this.state = 'idle';                       // idle | connecting | streaming | error
     this.statusText = 'No device';
     this.filters = { hampel: true, bandpass: true, low: 1, high: 40, notch: 50 };
@@ -49,6 +55,7 @@ export class Engine extends EventTarget {
       idx: Object.fromEntries(INDICES.map((i) => [i.id, 0])),       // raw ratios (smoothed)
       idxNorm: Object.fromEntries(INDICES.map((i) => [i.id, 0.5])), // 0–1 against the last minute
       heart: { bpm: 0, rmssd: 0, beat: 0, connected: 0 },
+      strap: Array.from({ length: 9 }, () => ({ bpm: 0, beat: 0, rmssd: 0, on: 0 })),   // index = slot, 0 unused
     };
   }
 
@@ -105,6 +112,27 @@ export class Engine extends EventTarget {
   async disconnectHeart() { if (!this.heart) return; const h = this.heart; this.heart = null; await h.disconnect(); this.features.heart = { bpm: 0, rmssd: 0, beat: 0, connected: 0 }; this._emit('heart'); }
   get heartName() { return this.heart ? this.heart.name : ''; }
 
+  // ── ANT+ straps (USB stick, main process) ───────────────────────────────
+  async antStart() { this.ant = await window.alma.antStart(); this._emit('ant'); return this.ant; }
+  async antStop() { this.ant = await window.alma.antStop(); this._emit('ant'); return this.ant; }
+  _onAnt(ev) {
+    if (ev.type === 'status') { this.ant = ev.payload; this._emit('ant'); return; }
+    if (ev.type !== 'data') return;
+    const d = ev.payload, now = performance.now();
+    let st = this.straps.get(d.id);
+    if (!st) { st = { id: d.id, bpm: 0, rr: [], lastBeat: 0, lastSeen: 0, beatCount: -1, rssi: null, firstSeen: Date.now() }; this.straps.set(d.id, st); }
+    const newBeat = d.beatCount !== st.beatCount;
+    st.bpm = d.bpm; st.lastSeen = Date.now(); st.rssi = d.rssi;
+    if (newBeat) {
+      if (st.beatCount >= 0) { const rr = d.rr || (d.bpm ? 60000 / d.bpm : 0); if (rr) { st.rr.push({ t: now, rr }); st.rr = st.rr.filter((x) => now - x.t < 60000); } }
+      st.beatCount = d.beatCount; st.lastBeat = now;
+      this._emit('beat', { id: d.id, bpm: d.bpm });
+    }
+    this._emit('strap', st);
+  }
+  assignStrap(slot, id) { if (id == null || id === '') delete this.strapSlots[slot]; else { for (const k of Object.keys(this.strapSlots)) if (this.strapSlots[k] === id) delete this.strapSlots[k]; this.strapSlots[slot] = id; } this._emit('ant'); }
+  slotOf(id) { for (const k of Object.keys(this.strapSlots)) if (this.strapSlots[k] === id) return +k; return 0; }
+
   get deviceName() { return this.device ? this.device.name : ''; }
   get stats() { return this.device ? this.device.stats : { notifications: 0, samples: 0, lastLen: 0, oddBytes: 0 }; }
   get spikesReplaced() { return this.chains.reduce((a, c) => a + c.hampel.replaced, 0); }
@@ -150,7 +178,17 @@ export class Engine extends EventTarget {
       }
       f.calm = f.idx.calm;
     }
-    if (this.heart) { const h = this.heart; f.heart.bpm = h.bpm; f.heart.rmssd = h.rmssd; f.heart.beat = h.lastBeat && now - h.lastBeat < 150 ? 1 : 0; f.heart.connected = h.connected ? 1 : 0; }
+    // straps by slot
+    const wall = Date.now();
+    for (let slot = 1; slot <= 8; slot++) {
+      const st = this.straps.get(this.strapSlots[slot]); const fs = f.strap[slot];
+      if (st && wall - st.lastSeen < 8000) { fs.on = 1; fs.bpm = st.bpm; fs.beat = st.lastBeat && now - st.lastBeat < 150 ? 1 : 0; fs.rmssd = rmssdOf(st.rr); }
+      else { fs.on = 0; fs.bpm = 0; fs.beat = 0; fs.rmssd = 0; }
+    }
+    // the main heart: slot 1 strap if alive, else the Bluetooth heart device
+    if (f.strap[1].on) { f.heart.bpm = f.strap[1].bpm; f.heart.rmssd = f.strap[1].rmssd; f.heart.beat = f.strap[1].beat; f.heart.connected = 1; }
+    else if (this.heart) { const h = this.heart; f.heart.bpm = h.bpm; f.heart.rmssd = h.rmssd; f.heart.beat = h.lastBeat && now - h.lastBeat < 150 ? 1 : 0; f.heart.connected = h.connected ? 1 : 0; }
+    else { f.heart.bpm = 0; f.heart.rmssd = 0; f.heart.beat = 0; f.heart.connected = 0; }
     f.t = now;
     this._emit('features');
   }

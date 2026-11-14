@@ -8,7 +8,7 @@ const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return
 const flags = { sim: argv.includes('--sim'), events: argv.includes('--events'), page: pageArg ? pageArg.split('=')[1] : null, preset: arg('preset'), view: arg('view') };
 
 contextBridge.exposeInMainWorld('alma', {
-  version: '0.2.0',
+  version: '0.3.0',
   flags,
   saveSession: (name, csvText, metaJson) => ipcRenderer.invoke('save-session', name, csvText, metaJson),
   listSessions: () => ipcRenderer.invoke('list-sessions'),
@@ -20,4 +20,8 @@ contextBridge.exposeInMainWorld('alma', {
   saveConfig: (json) => ipcRenderer.invoke('config-save', json),
   oscSend: (messages) => ipcRenderer.send('osc-send', messages),
   oscStats: () => ipcRenderer.invoke('osc-stats'),
+  antStart: () => ipcRenderer.invoke('ant-start'),
+  antStop: () => ipcRenderer.invoke('ant-stop'),
+  antStatus: () => ipcRenderer.invoke('ant-status'),
+  onAnt: (fn) => { ipcRenderer.on('ant-event', (_e, ev) => fn(ev)); },
 });

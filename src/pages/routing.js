@@ -1,6 +1,6 @@
 // Routing: where each signal goes. Destinations (host, port, rate) and mappings (signal → address),
 // edited in place, saved automatically, with the live value of every mapping next to it.
-import { SIGNALS, SIGNAL_BY_ID, SIGNAL_GROUPS, PRESETS } from '../signals.js';
+import { SIGNALS, SIGNAL_BY_ID, SIGNAL_GROUPS } from '../signals.js';
 
 export function mountRouting(root, { engine, router, saveConfig }) {
   root.innerHTML = `
@@ -8,11 +8,10 @@ export function mountRouting(root, { engine, router, saveConfig }) {
       <div class="routing-head">
         <div class="routing-title">
           <h1>Routing</h1>
-          <div class="hint">Every mapping takes a signal, scales it to a range and sends it as one OSC message to a destination, at that destination's rate. Events (blinks, contact) go out the moment they change.</div>
+          <div class="hint">Standard OSC over UDP. Add a destination (any host and port), then map signals to addresses.</div>
         </div>
         <div class="routing-tools">
           <div class="row"><div class="k">Sending</div><div class="seg-group" id="routerEnabled"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
-          <div class="row"><div class="k">Load preset</div><select id="preset"><option value="">Choose…</option>${PRESETS.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
           <div class="row"><div class="k">Messages sent</div><div class="v" id="oscSent">0</div></div>
         </div>
       </div>
@@ -26,7 +25,7 @@ export function mountRouting(root, { engine, router, saveConfig }) {
       <div class="table maps" id="maps">
         <div class="trow thead"><div>On</div><div>Signal</div><div>OSC address</div><div>Destination</div><div>Type</div><div>In min</div><div>In max</div><div>Out min</div><div>Out max</div><div>Smooth</div><div>Live</div><div></div></div>
       </div>
-      <div class="hint">In min/max: the signal range that maps to Out min/max (clamped). Smooth 0 = instant, 0.9 = very slow. Int sends whole numbers (use it for flags like sensor_active).</div>
+      <div class="hint">In → Out: the signal range that maps to the output range. Smooth 0 = instant, 0.9 = slow. Int sends whole numbers.</div>
     </section>`;
 
   const $ = (id) => root.querySelector('#' + id);
@@ -107,7 +106,6 @@ export function mountRouting(root, { engine, router, saveConfig }) {
 
   $('addDest').addEventListener('click', () => { router.addDestination(); saveConfig(); renderDests(); renderMaps(); });
   $('addMap').addEventListener('click', () => { if (!router.destinations.length) router.addDestination(); router.addMapping(); saveConfig(); renderDests(); renderMaps(); });
-  $('preset').addEventListener('change', (e) => { const p = PRESETS.find((x) => x.id === e.target.value); if (p) { router.loadPreset(p); saveConfig(); renderDests(); renderMaps(); } e.target.value = ''; });
   $('routerEnabled').querySelectorAll('button').forEach((b) => { b.classList.toggle('on', (b.dataset.v === '1') === router.enabled); b.addEventListener('click', () => { router.enabled = b.dataset.v === '1'; $('routerEnabled').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); saveConfig(); }); });
   setInterval(() => { if (!root.classList.contains('hidden')) refreshLive(); }, 100);
   renderDests(); renderMaps();

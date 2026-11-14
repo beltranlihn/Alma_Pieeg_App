@@ -14,10 +14,11 @@ const ui = { page: 'home', liveView: 'waves', display: null };
 let saveTimer = null;
 function saveConfig() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON() }, null, 2)), 300);
+  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON(), straps: engine.strapSlots }, null, 2)), 300);
 }
 const cfg = await window.alma.loadConfig();
-if (cfg) { Object.assign(ui, cfg.ui || {}); if (cfg.filters) Object.assign(engine.filters, cfg.filters); router.fromJSON(cfg.router); }
+if (cfg) { Object.assign(ui, cfg.ui || {}); if (cfg.filters) Object.assign(engine.filters, cfg.filters); router.fromJSON(cfg.router); if (cfg.straps) engine.strapSlots = { ...cfg.straps }; }
+engine.addEventListener('ant', saveConfig);
 
 // ── Pages ──
 if ((window.alma.flags || {}).view) ui.liveView = window.alma.flags.view;
@@ -47,7 +48,6 @@ for (const ev of ['state', 'quality', 'recording', 'disconnected']) engine.addEv
 refreshHeader();
 
 const flags = window.alma.flags || {};
-if (flags.preset) { const { PRESETS } = await import('./signals.js'); const p = PRESETS.find((x) => x.id === flags.preset); if (p) router.loadPreset(p); }
 show(flags.page || ui.page || 'home');
 if (flags.sim) {
   setTimeout(() => engine.connect('sim'), 300);
