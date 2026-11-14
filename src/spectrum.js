@@ -3,6 +3,7 @@
 import { CHANNELS } from './ble.js';
 import { BANDS } from './fft.js';
 import { XR_FACE } from './scope.js';
+import { BAND_COLOR } from './colors.js';
 
 export class SpectrumView {
   constructor(canvas, engine) {
@@ -27,8 +28,9 @@ export class SpectrumView {
     ctx.font = '11px Geist, Inter, sans-serif'; ctx.textAlign = 'center';
     BANDS.forEach((b, i) => {
       const x0 = fx(b.lo), x1 = fx(Math.min(b.hi, this.maxHz));
-      ctx.fillStyle = i % 2 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.015)'; ctx.fillRect(x0, top, x1 - x0, plotH);
-      ctx.fillStyle = '#8C8C8C'; ctx.fillText(b.label, (x0 + x1) / 2, top - 8);
+      ctx.fillStyle = BAND_COLOR[b.id] + '14'; ctx.fillRect(x0, top, x1 - x0, plotH);
+      ctx.fillStyle = BAND_COLOR[b.id]; ctx.fillRect(x0, top + plotH - 2, x1 - x0, 2);
+      ctx.fillStyle = '#B8B8B8'; ctx.fillText(b.label, (x0 + x1) / 2, top - 8);
     });
     // grid
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
@@ -57,7 +59,7 @@ export class SpectrumView {
       ctx.fillStyle = '#E0E0E0'; ctx.font = '600 12px Geist, Inter, sans-serif'; ctx.fillText(b.label, bx, y + 14);
       ctx.fillStyle = '#B8B8B8'; ctx.font = '11px Geist, Inter, sans-serif'; ctx.textAlign = 'right'; ctx.fillText(`${(v * 100).toFixed(0)} %`, bx + bw, y + 14); ctx.textAlign = 'left';
       ctx.fillStyle = '#262626'; ctx.fillRect(bx, y + 20, bw, 6);
-      ctx.fillStyle = '#E0E0E0'; ctx.fillRect(bx, y + 20, bw * Math.max(0, Math.min(1, v)), 6);
+      ctx.fillStyle = BAND_COLOR[b.id]; ctx.fillRect(bx, y + 20, bw * Math.max(0, Math.min(1, v)), 6);
     });
     const y = top + BANDS.length * rowH + 8;
     ctx.fillStyle = '#8C8C8C'; ctx.font = '11px Geist, Inter, sans-serif';

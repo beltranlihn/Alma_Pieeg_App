@@ -8,6 +8,7 @@ import { STATUS } from '../quality.js';
 import { PALETTES, PALETTE_BY_ID, DEFAULT_CUSTOM } from '../palettes.js';
 import { RESULT_METHODS, METHOD_BY_ID } from '../session.js';
 import { SIGNALS, SIGNAL_BY_ID } from '../signals.js';
+import { INDEX_COLOR, signalColor } from '../colors.js';
 
 const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '' };
 
@@ -58,19 +59,9 @@ export function mountLive(root, { engine, ui, saveConfig }) {
           <div class="row"><div class="k">Time grid</div><div class="seg-group" data-set="grid"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
         </div>
 
-        <h2>Session</h2>
-        <div class="stack">
-          <input type="text" id="participant" placeholder="Participant name">
-          <input type="text" id="notes" placeholder="Notes (piece, condition, anything)">
-          <div class="two"><button id="btnRecord" class="primary" disabled>Start session <kbd>R</kbd></button><button id="btnMark" disabled>Mark <kbd>M</kbd></button></div>
-          <div class="rows">
-            <div class="row"><div class="k">Elapsed</div><div class="v" id="recTime">—</div></div>
-            <div class="row"><div class="k">Samples · marks</div><div class="v" id="recSamples">—</div></div>
-          </div>
-        </div>
         <h2>Results</h2>
         <div class="rows" id="resultsCfg"></div>
-        <div class="hint">Each result is one signal and one way of reading it. They update live, go out by OSC as result1–3, and are written in the summary.</div>
+        <div class="hint">One signal, one way of reading it. Live above the views, by OSC as result1–3, and in the summary.</div>
         <h2>Last session</h2>
         <div class="rows" id="lastSession"><div class="row"><div class="k">—</div></div></div>
         <div class="hint">Three files per session in Documents / EEG Alma Center / sessions: raw µV, features at 10 Hz, summary.</div>
@@ -137,7 +128,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   const idxEl = $('indices');
   const idxRows = INDICES.map((i) => {
     const el = document.createElement('div'); el.className = 'index';
-    el.innerHTML = `<div class="index-head"><b>${i.label}</b><span class="formula">${i.formula}</span><span class="raw"></span></div><div class="meter"><div class="meter-fill"></div><div class="meter-mid"></div></div><div class="index-foot">${i.source} · 0–1 against this person's last minute</div>`;
+    el.innerHTML = `<div class="index-head"><i class="swatch" style="background:${INDEX_COLOR[i.id]}"></i><b>${i.label}</b><span class="formula">${i.formula}</span><span class="raw"></span></div><div class="meter"><div class="meter-fill" style="background:${INDEX_COLOR[i.id]}"></div><div class="meter-mid"></div></div><div class="index-foot">${i.source} · 0–1 against this person's last minute</div>`;
     idxEl.appendChild(el); return el;
   });
   const blinkEl = document.createElement('div'); blinkEl.className = 'index index-blink';
@@ -159,12 +150,13 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   }
 
   // ── session ──
-  const signalChoices = SIGNALS.filter((s) => s.kind !== 'event' && !s.id.startsWith('result') && !s.id.startsWith('session') && !s.id.startsWith('ch')).map((s) => `<option value="${s.id}">${s.label}</option>`).join('');
+  const short = (s) => s.id.startsWith('idx.') ? s.label.split(' · ')[0] : s.id.startsWith('raw.') ? `${s.label.split(' · ')[0]} (raw)` : s.id.startsWith('rel.') ? `${s.label.split(' · ')[0]} relative` : s.id.startsWith('abs.') ? `${s.label.split(' · ')[0]} absolute` : s.label.split(' · ').slice(0, 2).join(' · ');
+  const signalChoices = SIGNALS.filter((s) => s.kind !== 'event' && !s.id.startsWith('result') && !s.id.startsWith('session') && !s.id.startsWith('ch') && !s.id.startsWith('strap')).map((s) => `<option value="${s.id}">${short(s)}</option>`).join('');
   const cfgEl = $('resultsCfg');
   engine.session.results = (ui.results || engine.session.results).map((r) => ({ ...r }));
   engine.session.results.forEach((r, k) => {
     const row = document.createElement('div'); row.className = 'row result-row';
-    row.innerHTML = `<div class="k"><b>${k + 1}</b></div><select class="sig">${signalChoices}</select><select class="method">${RESULT_METHODS.map((m) => `<option value="${m.id}">${m.label}</option>`).join('')}</select>`;
+    row.innerHTML = `<div class="k"><b>${k + 1}</b></div><select class="sig">${signalChoices}</select><select class="method">${RESULT_METHODS.map((m) => `<option value="${m.id}" title="${m.help}">${m.label}</option>`).join('')}</select>`;
     const sig = row.querySelector('.sig'), method = row.querySelector('.method'); sig.value = r.signal; method.value = r.method;
     sig.addEventListener('change', () => { r.signal = sig.value; ui.results = engine.session.results; saveConfig(); renderResults(); });
     method.addEventListener('change', () => { r.method = method.value; ui.results = engine.session.results; saveConfig(); renderResults(); });
@@ -177,7 +169,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
       const sig = SIGNAL_BY_ID[r.signal], m = METHOD_BY_ID[r.method];
       const name = sig ? sig.label.split(' · ')[0] : r.signal;
       const val = s.active || s.summary ? (m ? m.fmt(s.live[k] || 0) : '—') : '—';
-      return `<div class="result"><div class="result-name">${name}<span>${m ? m.label.split(' · ')[0].split(' (')[0] : ''}</span></div><div class="result-value">${val}</div></div>`;
+      return `<div class="result" style="--c:${signalColor(r.signal)}"><div class="result-name"><i class="swatch"></i>${name}<span>${m ? m.label : ''}</span></div><div class="result-value${val === '—' ? ' empty' : ''}">${val}</div></div>`;
     }).join('') + `<div class="result result-time"><div class="result-name">Session<span>${s.participant || (s.active ? 'no name' : '')}</span></div><div class="result-value">${s.active || s.summary ? fmtClock(s.seconds) : '—'}</div></div>`;
   }
   async function toggleRecord() {
@@ -185,28 +177,28 @@ export function mountLive(root, { engine, ui, saveConfig }) {
     if (engine.session.active) {
       const r = await engine.endSession();
       const lines = [`<div class="row"><div class="k">${engine.session.participant || 'no name'}</div><div class="v">${fmtClock(engine.session.seconds)}</div></div>`]
-        .concat(engine.session.results.map((x, k) => `<div class="row"><div class="k">${SIGNAL_BY_ID[x.signal]?.label.split(' · ')[0] || x.signal} · ${METHOD_BY_ID[x.method]?.label.split(' · ')[0] || ''}</div><div class="v">${METHOD_BY_ID[x.method]?.fmt(engine.session.live[k] || 0)}</div></div>`))
+        .concat(engine.session.results.map((x, k) => `<div class="row"><div class="k">${SIGNAL_BY_ID[x.signal]?.label.split(' · ')[0] || x.signal} · ${METHOD_BY_ID[x.method]?.label || ''}</div><div class="v">${METHOD_BY_ID[x.method]?.fmt(engine.session.live[k] || 0)}</div></div>`))
         .concat([`<div class="row"><div class="k dim" title="${(r.paths || []).join('\n')}">${r.name}.*</div><div class="v"><button class="seg" id="openFolder">Open folder</button></div></div>`]);
       $('lastSession').innerHTML = lines.join('');
       $('lastSession').querySelector('#openFolder')?.addEventListener('click', () => window.alma.openSessionsFolder());
-    } else { engine.startSession($('participant').value.trim(), $('notes').value.trim()); scope.marks = []; }
+    } else { engine.startSession(document.getElementById('participant').value.trim(), document.getElementById('notes').value.trim()); scope.marks = []; }
     refreshRec(); renderResults();
   }
+  window.almaToggleSession = toggleRecord;
   function refreshRec() {
-    const rec = engine.recorder, on = engine.session.active;
-    $('btnRecord').innerHTML = on ? 'End session <kbd>R</kbd>' : 'Start session <kbd>R</kbd>'; $('btnRecord').className = on ? 'rec' : 'primary';
-    $('btnRecord').disabled = engine.state !== 'streaming'; $('btnMark').disabled = !on;
-    $('recTime').textContent = on ? fmtClock(engine.session.seconds) : '—';
-    $('recSamples').textContent = on ? `${rec.rows.length} · ${rec.marks.length}` : '—';
+    const rec = engine.recorder, on = engine.session.active, bar = document.getElementById('btnSession');
+    bar.innerHTML = on ? 'End session <kbd>R</kbd>' : 'Start session <kbd>R</kbd>'; bar.className = 'action ' + (on ? 'rec' : 'primary');
+    bar.disabled = engine.state !== 'streaming'; document.getElementById('btnMark').disabled = !on;
+    document.getElementById('sessionClock').textContent = on ? fmtClock(engine.session.seconds) : '';
+    document.getElementById('sessionMeta').textContent = on ? `${rec.rows.length} samples · ${rec.marks.length} marks` : '';
   }
   engine.addEventListener('session', () => { if (!root.classList.contains('hidden')) renderResults(); });
   renderResults();
   function mark() { const m = engine.mark('mark'); if (m) scope.marks.push({ t: performance.now(), text: m.text }); }
-  $('btnRecord').addEventListener('click', toggleRecord);
-  $('btnMark').addEventListener('click', mark);
+  document.getElementById('btnSession').addEventListener('click', toggleRecord);
+  document.getElementById('btnMark').addEventListener('click', mark);
   const onKey = (e) => {
-    if (root.classList.contains('hidden')) return;
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
     if (e.key.toLowerCase() === 'm') mark();
     if (e.key.toLowerCase() === 'r') toggleRecord();
   };

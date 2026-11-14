@@ -40,6 +40,7 @@ function refreshHeader() {
   const streaming = engine.state === 'streaming';
   $('hdrDot').className = 'dot ' + (streaming ? 'on' : engine.state === 'error' ? 'bad' : engine.state === 'connecting' ? 'warn' : '');
   $('hdrText').textContent = streaming ? `${engine.deviceName} · ${engine.features.rate.toFixed(0)} /s · ${engine.features.contactGood}/8 contact${engine.recorder.active ? ' · recording' : ''}` : engine.statusText;
+  const bar = $('btnSession'); if (bar) bar.disabled = engine.state !== 'streaming';
   $('hdrConnect').textContent = engine.device ? 'Disconnect' : 'Connect PiEEG';
   $('hdrConnect').disabled = engine.state === 'connecting';
 }

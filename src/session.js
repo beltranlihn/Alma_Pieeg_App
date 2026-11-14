@@ -7,11 +7,11 @@ import { BANDS } from './fft.js';
 import { INDICES } from './indices.js';
 
 export const RESULT_METHODS = [
-  { id: 'change', label: 'Change · last 30 s vs first 30 s (%)', unit: '%', fmt: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)} %` },
-  { id: 'mean', label: 'Average over the session (0–100)', unit: '', fmt: (v) => v.toFixed(0) },
-  { id: 'now', label: 'Current value, smoothed (0–100)', unit: '', fmt: (v) => v.toFixed(0) },
-  { id: 'peak', label: 'Best 10 s of the session (0–100)', unit: '', fmt: (v) => v.toFixed(0) },
-  { id: 'time', label: 'Time above 60 (% of session)', unit: '%', fmt: (v) => `${v.toFixed(0)} %` },
+  { id: 'change', label: 'Change vs start', help: 'last 30 s vs first 30 s, ±%', fmt: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)} %` },
+  { id: 'mean', label: 'Average', help: 'mean over the session, 0–100', fmt: (v) => v.toFixed(0) },
+  { id: 'now', label: 'Now', help: 'last 3 s, 0–100', fmt: (v) => v.toFixed(0) },
+  { id: 'peak', label: 'Best 10 s', help: 'highest 10 s window, 0–100', fmt: (v) => v.toFixed(0) },
+  { id: 'time', label: 'Time above 60', help: '% of the session above 60', fmt: (v) => `${v.toFixed(0)} %` },
 ];
 export const METHOD_BY_ID = Object.fromEntries(RESULT_METHODS.map((m) => [m.id, m]));
 

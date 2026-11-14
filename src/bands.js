@@ -2,6 +2,7 @@
 // as lanes with a line each, plus the current value. This is the view for art: what is moving, slowly.
 import { BANDS } from './fft.js';
 import { INDICES } from './indices.js';
+import { BAND_COLOR, INDEX_COLOR, HEART_COLOR } from './colors.js';
 
 const HISTORY_SEC = 60, HZ = 10;
 
@@ -9,12 +10,12 @@ export class BandsView {
   constructor(canvas, engine) {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.engine = engine;
     this.lanes = [
-      ...BANDS.map((b) => ({ id: `rel.${b.id}`, label: b.label, sub: 'relative power', get: (f) => f.rel[b.id], fmt: (v) => `${(v * 100).toFixed(0)} %` })),
-      ...INDICES.map((i) => ({ id: `idx.${i.id}`, label: i.label, sub: i.formula, get: (f) => f.idxNorm[i.id], fmt: (v) => v.toFixed(2) })),
-      { id: 'heart', label: 'Heart', sub: 'beats per minute', get: (f) => f.heart.bpm / 120, fmt: (v) => `${(v * 120).toFixed(0)} bpm` },
+      ...BANDS.map((b) => ({ id: `rel.${b.id}`, label: b.label, sub: 'relative power', color: BAND_COLOR[b.id], get: (f) => f.rel[b.id], fmt: (v) => `${(v * 100).toFixed(0)} %` })),
+      ...INDICES.map((i) => ({ id: `idx.${i.id}`, label: i.label, sub: i.formula, color: INDEX_COLOR[i.id], get: (f) => f.idxNorm[i.id], fmt: (v) => v.toFixed(2) })),
+      { id: 'heart', label: 'Heart', sub: 'beats per minute', color: HEART_COLOR, get: (f) => f.heart.bpm / 120, fmt: (v) => `${(v * 120).toFixed(0)} bpm` },
     ];
     this.hist = this.lanes.map(() => new Float32Array(HISTORY_SEC * HZ).fill(NaN));
-    this.pos = 0; this.colors = null; this.lineWidth = 1;
+    this.pos = 0; this.colors = null; this.colorize = true; this.lineWidth = 1;
     setInterval(() => this._sample(), 1000 / HZ);
     this._resize = this._resize.bind(this); window.addEventListener('resize', this._resize); this._resize();
   }
@@ -39,10 +40,11 @@ export class BandsView {
     this.lanes.forEach((l, i) => {
       const y0 = top + i * laneH, y1 = y0 + laneH - laneGap;
       ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(left, Math.round(y1) + 0.5); ctx.lineTo(left + plotW, Math.round(y1) + 0.5); ctx.stroke();
+      if (this.colorize) { ctx.fillStyle = l.color; ctx.fillRect(6, y0 + 6, 3, laneH - laneGap - 12); }
       ctx.fillStyle = '#E0E0E0'; ctx.font = '600 12px Geist, Inter, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(l.label, 16, y0 + 14);
       ctx.fillStyle = '#8C8C8C'; ctx.font = '11px Geist, Inter, sans-serif'; ctx.fillText(l.sub, 16, y0 + 28);
       const hist = this.hist[i];
-      ctx.strokeStyle = this.colors ? this.colors[i % this.colors.length] : '#E0E0E0'; ctx.lineWidth = this.lineWidth; ctx.beginPath(); let started = false;
+      ctx.strokeStyle = this.colorize ? l.color : '#E0E0E0'; ctx.lineWidth = this.lineWidth; ctx.beginPath(); let started = false;
       for (let k = 0; k < N; k++) {
         const v = hist[(this.pos + k) % N]; if (Number.isNaN(v)) { started = false; continue; }
         const x = left + (k / (N - 1)) * plotW, y = y1 - Math.max(0, Math.min(1, v)) * (laneH - laneGap - 4) - 2;
