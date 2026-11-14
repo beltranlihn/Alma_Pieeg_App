@@ -31,32 +31,53 @@ export function mountLive(root, { engine, ui, saveConfig }) {
         <div class="empty" id="liveEmpty"><b>Nothing streaming</b><div>Connect on Home, or start the Simulator.</div></div>
       </div>
       <aside class="live-side">
-        <h2>Channels</h2>
-        <div class="rows contact" id="liveChannels"></div>
-
-
-        <div id="wavesSettings">
+        <div data-for="bands">
+          <h2>Bands and indices</h2>
+          <div class="rows contact" id="laneRows"></div>
+        </div>
+        <div data-for="indices">
+          <h2>Indices</h2>
+          <div class="rows contact" id="indexRows"></div>
+        </div>
+        <div data-for="waves spectrum">
+          <h2>Channels</h2>
+          <div class="rows contact" id="liveChannels"></div>
+        </div>
+        <div data-for="waves">
           <h2>Waves</h2>
           <div class="rows">
             <div class="row"><div class="k">Window</div><div class="seg-group" data-set="seconds"><button class="seg" data-v="4">4 s</button><button class="seg on" data-v="8">8 s</button><button class="seg" data-v="16">16 s</button></div></div>
             <div class="row"><div class="k">Scale</div><div class="seg-group" data-set="scale"><button class="seg" data-v="50">50</button><button class="seg on" data-v="100">100</button><button class="seg" data-v="200">200</button><button class="seg" data-v="500">500 µV</button></div></div>
             <div class="row"><div class="k">Trace</div><div class="seg-group" data-set="source"><button class="seg on" data-v="filt">Filtered</button><button class="seg" data-v="raw">Raw</button></div></div>
+            <div class="row"><div class="k">Time grid</div><div class="seg-group" data-set="grid"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
           </div>
         </div>
-
-        <h2>Filters</h2>
-        <div class="rows">
-          <div class="row"><div class="k">Band-pass 1–40 Hz</div><div class="seg-group" data-set="bandpass"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
-          <div class="row"><div class="k">Notch</div><div class="seg-group" data-set="notch"><button class="seg on" data-v="50">50 Hz</button><button class="seg" data-v="60">60 Hz</button><button class="seg" data-v="0">Off</button></div></div>
-          <div class="row"><div class="k">Spike rejection</div><div class="seg-group" data-set="hampel"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
+        <div data-for="spectrum">
+          <h2>Spectrum</h2>
+          <div class="rows">
+            <div class="row"><div class="k">Range</div><div class="seg-group" data-set="maxHz"><button class="seg" data-v="30">0–30 Hz</button><button class="seg on" data-v="60">0–60 Hz</button><button class="seg" data-v="100">0–100 Hz</button></div></div>
+          </div>
         </div>
-
-        <h2>Appearance</h2>
-        <div class="rows">
-          <div class="row"><div class="k">Palette</div><select id="palette" style="width:150px">${PALETTES.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
-          <div class="row" id="customRow"><div class="k">Channel colours</div><div class="swatches" id="swatches"></div></div>
-          <div class="row"><div class="k">Line width</div><div class="seg-group" data-set="lineWidth"><button class="seg on" data-v="1">1</button><button class="seg" data-v="1.5">1.5</button><button class="seg" data-v="2">2 px</button></div></div>
-          <div class="row"><div class="k">Time grid</div><div class="seg-group" data-set="grid"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
+        <div data-for="waves spectrum">
+          <h2>Channel colours</h2>
+          <div class="rows">
+            <div class="row"><div class="k">Palette</div><select id="palette" style="width:150px">${PALETTES.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
+            <div class="row" id="customRow"><div class="k">Custom</div><div class="swatches" id="swatches"></div></div>
+          </div>
+        </div>
+        <div data-for="bands waves spectrum">
+          <h2>Lines</h2>
+          <div class="rows">
+            <div class="row"><div class="k">Line width</div><div class="seg-group" data-set="lineWidth"><button class="seg on" data-v="1">1</button><button class="seg" data-v="1.5">1.5</button><button class="seg" data-v="2">2 px</button></div></div>
+          </div>
+        </div>
+        <div data-for="waves spectrum">
+          <h2>Filters</h2>
+          <div class="rows">
+            <div class="row"><div class="k">Band-pass 1–40 Hz</div><div class="seg-group" data-set="bandpass"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
+            <div class="row"><div class="k">Notch</div><div class="seg-group" data-set="notch"><button class="seg on" data-v="50">50 Hz</button><button class="seg" data-v="60">60 Hz</button><button class="seg" data-v="0">Off</button></div></div>
+            <div class="row"><div class="k">Spike rejection</div><div class="seg-group" data-set="hampel"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
+          </div>
         </div>
 
         <h2>Results</h2>
@@ -76,12 +97,13 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   ui.liveView = view;
 
   // ── settings (persisted) ──
-  const settings = Object.assign({ seconds: 8, scale: 100, source: 'filt', bandpass: 1, notch: 50, hampel: 1, palette: 'mono', custom: [...DEFAULT_CUSTOM], lineWidth: 1, grid: 1 }, ui.display || {});
+  const settings = Object.assign({ seconds: 8, scale: 100, source: 'filt', bandpass: 1, notch: 50, hampel: 1, palette: 'mono', custom: [...DEFAULT_CUSTOM], lineWidth: 1, grid: 1, maxHz: 60 }, ui.display || {});
   function applySettings() {
     scope.seconds = settings.seconds; scope.scaleUv = settings.scale; scope.source = settings.source;
     const pal = PALETTE_BY_ID[settings.palette] || PALETTES[0];
     const colors = pal.colors || settings.custom;
     scope.channelColors = settings.palette === 'mono' ? null : colors; spectrum.channelColors = settings.palette === 'mono' ? null : colors;
+    spectrum.maxHz = settings.maxHz;
     scope.lineWidth = settings.lineWidth; spectrum.lineWidth = settings.lineWidth; bands.lineWidth = settings.lineWidth; bands.colors = settings.palette === 'mono' ? null : colors; scope.grid = !!settings.grid;
     $('customRow').style.display = settings.palette === 'custom' ? '' : 'none';
     engine.setFilters({ hampel: !!settings.hampel, bandpass: !!settings.bandpass, notch: settings.notch });
@@ -109,7 +131,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
     view = v; ui.liveView = v; saveConfig();
     root.querySelectorAll('.subtab').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
     $('viewWaves').classList.toggle('hidden', v !== 'waves'); $('viewBands').classList.toggle('hidden', v !== 'bands'); $('viewSpectrum').classList.toggle('hidden', v !== 'spectrum'); $('viewIndices').classList.toggle('hidden', v !== 'indices');
-    $('wavesSettings').style.display = v === 'waves' ? '' : 'none';
+    root.querySelectorAll('[data-for]').forEach((el) => { el.style.display = el.dataset.for.split(' ').includes(v) ? '' : 'none'; });
     scope._resize(); spectrum._resize(); bands._resize();
   }
   root.querySelectorAll('.subtab').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -124,6 +146,16 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   });
   scope.visible = visible;
 
+  // ── bands lanes and index cards: click to hide/show (persisted) ──
+  const hiddenLanes = new Set(ui.hiddenLanes || []), hiddenIdx = new Set(ui.hiddenIndices || []);
+  bands.hidden = hiddenLanes;
+  bands.lanes.forEach((l) => {
+    const row = document.createElement('div'); row.className = 'row clickable' + (hiddenLanes.has(l.id) ? ' off' : '');
+    row.innerHTML = `<i class="swatch" style="background:${l.color}"></i><div class="k"><b>${l.label}</b> · ${l.sub}</div>`;
+    row.addEventListener('click', () => { hiddenLanes.has(l.id) ? hiddenLanes.delete(l.id) : hiddenLanes.add(l.id); row.classList.toggle('off', hiddenLanes.has(l.id)); ui.hiddenLanes = [...hiddenLanes]; saveConfig(); });
+    $('laneRows').appendChild(row);
+  });
+
   // ── indices ──
   const idxEl = $('indices');
   const idxRows = INDICES.map((i) => {
@@ -137,6 +169,13 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   const note = document.createElement('div'); note.className = 'hint wide';
   note.textContent = 'These are band-power ratios, computed with the formulas PiEEG uses in its experiences. Focus rises with facial tension; alpha rises when the eyes close. Read them as relative spectral indicators, not as a reading of the mind.';
   idxEl.appendChild(note);
+  INDICES.forEach((i, k) => {
+    idxRows[k].style.display = hiddenIdx.has(i.id) ? 'none' : '';
+    const row = document.createElement('div'); row.className = 'row clickable' + (hiddenIdx.has(i.id) ? ' off' : '');
+    row.innerHTML = `<i class="swatch" style="background:${INDEX_COLOR[i.id]}"></i><div class="k"><b>${i.label}</b> · ${i.formula}</div>`;
+    row.addEventListener('click', () => { hiddenIdx.has(i.id) ? hiddenIdx.delete(i.id) : hiddenIdx.add(i.id); row.classList.toggle('off', hiddenIdx.has(i.id)); idxRows[k].style.display = hiddenIdx.has(i.id) ? 'none' : ''; ui.hiddenIndices = [...hiddenIdx]; saveConfig(); });
+    $('indexRows').appendChild(row);
+  });
 
   function refreshIndices() {
     const f = engine.features;

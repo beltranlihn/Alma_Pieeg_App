@@ -15,7 +15,7 @@ export class BandsView {
       { id: 'heart', label: 'Heart', sub: 'beats per minute', color: HEART_COLOR, get: (f) => f.heart.bpm / 120, fmt: (v) => `${(v * 120).toFixed(0)} bpm` },
     ];
     this.hist = this.lanes.map(() => new Float32Array(HISTORY_SEC * HZ).fill(NaN));
-    this.pos = 0; this.colors = null; this.colorize = true; this.lineWidth = 1;
+    this.pos = 0; this.colors = null; this.colorize = true; this.lineWidth = 1; this.hidden = new Set();
     setInterval(() => this._sample(), 1000 / HZ);
     this._resize = this._resize.bind(this); window.addEventListener('resize', this._resize); this._resize();
   }
@@ -35,10 +35,12 @@ export class BandsView {
     const { ctx, w, h } = this, f = this.engine.features, N = HISTORY_SEC * HZ;
     ctx.fillStyle = '#111111'; ctx.fillRect(0, 0, w, h);
     const left = 170, right = 90, top = 16, bottom = 22, laneGap = 6;
-    const laneH = (h - top - bottom) / this.lanes.length, plotW = w - left - right;
+    const shown = this.lanes.map((l, i) => i).filter((i) => !this.hidden.has(this.lanes[i].id));
+    const laneH = (h - top - bottom) / Math.max(1, shown.length), plotW = w - left - right;
     ctx.font = '11px Geist, Inter, sans-serif';
-    this.lanes.forEach((l, i) => {
-      const y0 = top + i * laneH, y1 = y0 + laneH - laneGap;
+    shown.forEach((i, row) => {
+      const l = this.lanes[i];
+      const y0 = top + row * laneH, y1 = y0 + laneH - laneGap;
       ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(left, Math.round(y1) + 0.5); ctx.lineTo(left + plotW, Math.round(y1) + 0.5); ctx.stroke();
       if (this.colorize) { ctx.fillStyle = l.color; ctx.fillRect(6, y0 + 6, 3, laneH - laneGap - 12); }
       ctx.fillStyle = '#E0E0E0'; ctx.font = '600 12px Geist, Inter, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(l.label, 16, y0 + 14);
