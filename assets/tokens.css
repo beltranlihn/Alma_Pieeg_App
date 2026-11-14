@@ -1,0 +1,66 @@
+/* VEATION — generated from tokens.json */
+@font-face { font-family: "Geist"; src: url("fonts/geist-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Geist"; src: url("fonts/geist-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Geist"; src: url("fonts/geist-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("fonts/inter-latin.woff2") format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
+:root {
+  --well-deep: #0a0b0c;
+  --s0: #111111;
+  --s1: #1b1b1b;
+  --s2: #262626;
+  --bar: #242424;
+  --state-hover: #303030;
+  --state-on: #4a4a4a;
+  --ink: #e0e0e0;
+  --ink-2: #b8b8b8;
+  --ink-3: #8c8c8c;
+  --ink-dim: #6d6d6d;
+  --line-soft: rgba(255,255,255,0.05);
+  --line: rgba(255,255,255,0.10);
+  --line-strong: rgba(255,255,255,0.16);
+  --auto-ovr: #e5b567;
+  --auto-live: #4fc3e8;
+  --danger: #e06c6c;
+  --toggle-on: #4a8d6f;
+  --react-blue: #7fb2e8;
+  --p-az: #e0954b;
+  --p-el: #d8c24b;
+  --p-size: #e0645c;
+  --p-rot: #c58bd0;
+  --p-op: #7fb2e8;
+  --p-exp: #e8c84b;
+  --p-sat: #d06fb0;
+  --logo-ink: #e7e6e0;
+  --logo-dot: #f4b23a;
+  --sp-2: 2px;
+  --sp-4: 4px;
+  --sp-6: 6px;
+  --sp-8: 8px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+  --sp-20: 20px;
+  --sp-24: 24px;
+  --sp-32: 32px;
+  --slide-margin: 128px;
+  --slide-margin-bottom: 160px;
+  --slide-footer: 64px;
+  --social-margin: 96px;
+  --radius-0: 0px;
+  --radius-2: 2px;
+  --radius-3: 3px;
+  --radius-4: 4px;
+  --radius-round: 50%;
+  --font-sans: "Geist", "Inter", system-ui, sans-serif;
+  color-scheme: dark;
+}
+.slide-display { font-family: var(--font-sans); font-size: 200px; line-height: 1; font-weight: 600; letter-spacing: -6px; }
+.slide-statement { font-family: var(--font-sans); font-size: 128px; line-height: 1.05; font-weight: 600; letter-spacing: -4px; }
+.slide-hero { font-family: var(--font-sans); font-size: 96px; line-height: 1.1; font-weight: 600; letter-spacing: -2px; }
+.slide-title { font-family: var(--font-sans); font-size: 64px; line-height: 1.1; font-weight: 600; letter-spacing: -1px; }
+.slide-subtitle { font-family: var(--font-sans); font-size: 44px; line-height: 1.2; font-weight: 400; }
+.slide-body { font-family: var(--font-sans); font-size: 32px; line-height: 1.4; font-weight: 400; }
+.slide-row { font-family: var(--font-sans); font-size: 28px; line-height: 1.4; font-weight: 400; }
+.slide-label { font-family: var(--font-sans); font-size: 24px; line-height: 1.4; font-weight: 400; }
+.social-statement { font-family: var(--font-sans); font-size: 112px; line-height: 1.05; font-weight: 600; letter-spacing: -3px; }
+.social-tagline { font-family: var(--font-sans); font-size: 30px; line-height: 1.3; font-weight: 400; }
+.ui-body { font-family: var(--font-sans); font-size: 11px; line-height: 16px; font-weight: 400; letter-spacing: -0.003em; }

@@ -1,0 +1,54 @@
+# EEG Alma Center
+
+Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and routes** biosignals. Built around the PiEEG XR
+face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
+*Soul Charger* VR experience, but meant to send anything to anything: OSC, WebSocket, files.
+
+Status: **0.1 · F0 "See"**: connect, scope, contact quality, record. Roadmap in
+`VR Unreal/docs/EEG-ALMA-CENTER-INVESTIGACION-Y-PLAN.md` (§8).
+
+## Run
+
+```bash
+npm install
+npm start              # the app
+npm start -- --sim     # starts the built-in simulator at once
+npm test               # DSP, decoder and recorder tests (node --test)
+npm run dist           # Windows installer + portable exe in dist/
+```
+
+## Use
+
+1. Power the PiEEG box **from a battery or from the headset** (never from a mains-powered PC while someone wears it).
+2. Put the mask on, press **Connect PiEEG**. The host picks the first `PiEEG_XR` / IronBCI it sees.
+3. Watch **Contact**: every channel should be green within a second. Grey = no contact, red = hum or railed (reference lost).
+4. **Record** (or `R`), drop marks with `M`, **Stop & save**. Sessions land in `Documents/EEG Alma Center/sessions/` as
+   `name_YYYYMMDD_HHMMSS.csv` (`timestamp, ch1..ch8` raw µV, `mark`) plus a `.json` sidecar. The CSV layout matches
+   PiEEG's recordings, so PiEEG Studio (MNE-Python) opens them.
+
+**Simulator** keys: `B` blink · `J` jaw clench · `←` `→` eye movement · `1`–`8` toggle a bad contact on that channel.
+
+## How it is built
+
+Plain Electron (no bundler), ES modules in the renderer, `contextIsolation` + sandbox, one preload bridge (`window.alma`).
+Design follows the VEATION design system (`assets/tokens.css`, Geist): grey surfaces, 1 px lines, amber only as a point.
+
+| File | Role |
+|---|---|
+| `main.js` | window, Web Bluetooth device chooser, session files, screenshot self-test (`--shot=path --quit-after=ms`) |
+| `src/ble.js` | PiEEG/IronBCI BLE protocol: notify `fe42`, 24 bytes per sample, 24-bit two's complement → µV |
+| `src/sim.js` | 8-channel simulator with blinks, jaw, eye movements, bad contacts |
+| `src/dsp.js` | Hampel (5, 3σ), Butterworth 1–40 Hz (4th order), notch 50/60 Hz, Goertzel |
+| `src/ring.js` | ring buffers (raw + filtered) and the sample clock |
+| `src/quality.js` | contact status per channel from rms, mains hum and railing |
+| `src/scope.js` | the oscilloscope (Canvas 2D, 60 fps) with the XR Face electrode names |
+| `src/record.js` | CSV + JSON session recorder with marks |
+| `src/app.js` | wiring and UI |
+
+Electrode map (PiEEG XR): Ch1–2 left temple (lower, upper) · Ch3–4 left forehead · Ch5–6 right forehead ·
+Ch7–8 right temple (upper, lower) · reference and bias at the centre of the forehead.
+
+## Credits
+
+Protocol and the shape of the detectors follow PiEEG's open-source work (MIT): https://github.com/pieeg-club/PiEEG-server.
+Not a medical device. Research and art use only.
