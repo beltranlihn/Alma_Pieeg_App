@@ -25,7 +25,18 @@ export class Engine extends EventTarget {
     this.chains = Array.from({ length: CHANNELS }, () => new ChannelChain(this.fs));
     this.recorder = new Recorder();
     this.session = new Session();
-    setInterval(() => { if (this.session.active && this.state === 'streaming') { this.session.log(this.features, SIGNAL_BY_ID); for (let k = 0; k < 3; k++) this.features.result[k] = this.session.live[k] || 0; this.features.sessionElapsed = this.session.seconds; this._emit('session'); } }, 100);
+    this.liveLog = new Session(); this.liveLog.results = this.session.results;   // same result definitions
+    this.liveLog.maxRows = 6000;                                                 // last 10 min at 10 Hz
+    setInterval(() => {
+      if (this.state !== 'streaming') return;
+      this.liveLog.results = this.session.results;
+      this.liveLog.log(this.features, SIGNAL_BY_ID);
+      const src = this.session.active ? this.session : this.liveLog;
+      if (this.session.active) this.session.log(this.features, SIGNAL_BY_ID);
+      for (let k = 0; k < 3; k++) this.features.result[k] = src.live[k] || 0;
+      this.features.sessionElapsed = this.session.active ? this.session.seconds : 0;
+      this._emit('session');
+    }, 100);
     this.fft = new FFT(256, this.fs);
     this.blink = new BlinkDetector(this.fs, FOREHEAD);
     this.norms = Object.fromEntries(INDICES.map((i) => [i.id, new RollingNorm(60, 10)]));
@@ -88,6 +99,7 @@ export class Engine extends EventTarget {
       this._setState('error', msg); return false;
     }
     this.startedAt = Date.now();
+    this.liveLog.start('', '');
     if (kind === 'sim' && !this.heart) this.connectHeart('sim');
     this._rate = { samples: 0, t0: performance.now(), value: 0 };
     this._setState('streaming', `${dev.name} · streaming`);

@@ -45,15 +45,20 @@ function createWindow() {
     else pendingBleCallback = callback;   // keep scanning; the event fires again with more devices
   });
 
+  const sizeArg = process.argv.find((a) => a.startsWith('--size='));
+  if (sizeArg) { const [w, h] = sizeArg.split('=')[1].split('x').map(Number); win.setContentSize(w, h); }
   win.loadFile('index.html');
 
   // Self-test harness: `electron . --sim --shot=C:\path\out.png --quit-after=6000` captures the window.
   const shotArg = process.argv.find((a) => a.startsWith('--shot='));
   const quitArg = process.argv.find((a) => a.startsWith('--quit-after='));
   if (shotArg || quitArg) {
+    win.webContents.on('console-message', (e) => { const lvl = e.level ?? e.params?.level; if (lvl === 'error' || lvl === 'warning' || lvl >= 2) console.log('CONSOLE', lvl, e.message ?? e.params?.message, (e.sourceId || '').split('/').pop(), e.lineNumber || ''); });
     win.webContents.once('did-finish-load', () => {
       const wait = quitArg ? +quitArg.split('=')[1] : 6000;
       setTimeout(async () => {
+        const probeArg = process.argv.find((a) => a.startsWith('--probe='));
+        if (probeArg) { try { console.log('PROBE', JSON.stringify(await win.webContents.executeJavaScript(decodeURIComponent(probeArg.slice(8))))); } catch (e) { console.log('PROBE-ERR', e.message); } }
         if (shotArg) { const img = await win.webContents.capturePage(); fs.writeFileSync(shotArg.split('=')[1], img.toPNG()); }
         app.quit();
       }, wait);

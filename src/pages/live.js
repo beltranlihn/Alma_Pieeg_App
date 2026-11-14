@@ -17,8 +17,8 @@ export function mountLive(root, { engine, ui, saveConfig }) {
     <section class="live">
       <div class="live-main">
         <div class="subtabs" id="views">
-          <button class="subtab on" data-view="waves">Waves</button>
           <button class="subtab" data-view="bands">Bands</button>
+          <button class="subtab" data-view="waves">Waves</button>
           <button class="subtab" data-view="spectrum">Spectrum</button>
           <button class="subtab" data-view="indices">Indices</button>
           <div class="subtabs-right" id="liveStatus"></div>
@@ -72,7 +72,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   const scope = new Scope($('scope'), engine.rings);
   const spectrum = new SpectrumView($('spectrum'), engine);
   const bands = new BandsView($('bands'), engine);
-  let view = ui.liveView || 'waves';
+  let view = ui.liveView || 'bands';
   ui.liveView = view;
 
   // ── settings (persisted) ──
@@ -164,13 +164,13 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   });
   const resultsEl = $('results');
   function renderResults() {
-    const s = engine.session, f = engine.features;
+    const s = engine.session, f = engine.features, src = s.active ? s : engine.liveLog, streaming = engine.state === 'streaming';
     resultsEl.innerHTML = s.results.map((r, k) => {
       const sig = SIGNAL_BY_ID[r.signal], m = METHOD_BY_ID[r.method];
       const name = sig ? sig.label.split(' · ')[0] : r.signal;
-      const val = s.active || s.summary ? (m ? m.fmt(s.live[k] || 0) : '—') : '—';
-      return `<div class="result" style="--c:${signalColor(r.signal)}"><div class="result-name"><i class="swatch"></i>${name}<span>${m ? m.label : ''}</span></div><div class="result-value${val === '—' ? ' empty' : ''}">${val}</div></div>`;
-    }).join('') + `<div class="result result-time"><div class="result-name">Session<span>${s.participant || (s.active ? 'no name' : '')}</span></div><div class="result-value">${s.active || s.summary ? fmtClock(s.seconds) : '—'}</div></div>`;
+      const val = streaming && src.rows.length >= 20 ? (m ? m.fmt(src.live[k] || 0) : '—') : '—';
+      return `<div class="result" style="--c:${signalColor(r.signal)}"><div class="result-name"><i class="swatch"></i>${name}<span>${m ? m.label : ''}</span></div><div class="result-value${val === '—' ? ' is-empty' : ''}">${val}</div></div>`;
+    }).join('') + `<div class="result result-time"><div class="result-name">${s.active ? 'Session' : 'Live'}<span>${s.active ? (s.participant || 'no name') : 'since connected · no session'}</span></div><div class="result-value">${s.active ? fmtClock(s.seconds) : streaming ? fmtClock(src.rows.length / 10) : '—'}</div></div>`;
   }
   async function toggleRecord() {
     if (engine.state !== 'streaming') return;

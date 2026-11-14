@@ -41,6 +41,7 @@ export class Session {
     if (!this.active) return;
     const row = { t: Date.now(), v: FEATURE_COLUMNS.map((c) => c.get(f)) };
     this.rows.push(row);
+    if (this.maxRows && this.rows.length > this.maxRows) this.rows.splice(0, this.rows.length - this.maxRows);
     this.results.forEach((r, k) => { this.live[k] = this.compute(r, signalById); });
   }
 

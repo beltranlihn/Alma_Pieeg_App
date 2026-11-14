@@ -63,7 +63,7 @@ Ch7–8 right temple (upper, lower) · reference and bias at the centre of the f
 
 ## Credits
 
-3D head: Lee Perry-Smith head scan by Infinite-Realities (CC-BY), as shipped with the three.js examples. three.js (MIT) is vendored in `assets/vendor`.
+3D head: Lee Perry-Smith head scan by Infinite-Realities (CC-BY), as shipped with the three.js examples. Hand: generic XR hand from @webxr-input-profiles/assets (MIT, `assets/models/LICENSE.hand.md`). three.js (MIT) is vendored in `assets/vendor`.
 
 Protocol and the shape of the detectors follow PiEEG's open-source work (MIT): https://github.com/pieeg-club/PiEEG-server.
 Not a medical device. Research and art use only.

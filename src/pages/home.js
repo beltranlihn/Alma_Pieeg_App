@@ -1,5 +1,6 @@
 // Home: is the sensor on, connected, streaming, touching the skin, and does it see blinks?
 import { HeadView } from '../head.js';
+import { HandView } from '../hand.js';
 import { CHANNELS } from '../ble.js';
 import { STATUS } from '../quality.js';
 import { XR_FACE } from '../scope.js';
@@ -12,7 +13,7 @@ export function mountHome(root, { engine, ui }) {
   root.innerHTML = `
     <section class="home">
       <div class="home-face">
-        <div class="head-wrap" id="homeFace"></div><div class="head-tools"><div class="seg-group" id="headMode"><button class="seg on" data-v="contact">Contact</button>${BANDS.map((b) => `<button class="seg" data-v="${b.id}">${b.label}</button>`).join('')}<button class="seg" data-v="total">Activity</button></div><button class="seg" id="homeResetView">Reset view</button></div>
+        <div class="home-visual"><div class="vis-cell"><div class="stage head-wrap" id="homeFace"></div><div class="vis-caption"><div class="dot" id="capHeadDot"></div><b>PiEEG XR</b><span id="capHead">not connected</span></div></div><div class="vis-cell"><div class="stage" id="homeHand"></div><div class="vis-caption"><div class="dot" id="capHandDot"></div><b>Heart</b><span class="big" id="capHand">—</span></div></div></div><div class="head-tools"><div class="seg-group" id="headMode"><button class="seg on" data-v="contact">Contact</button>${BANDS.map((b) => `<button class="seg" data-v="${b.id}">${b.label}</button>`).join('')}<button class="seg" data-v="total">Activity</button></div><button class="seg" id="homeResetView">Reset view</button></div>
         <div class="home-status"><div class="dot" id="homeDot"></div><div id="homeText">No device</div></div>
         <div class="home-actions">
           <button class="primary" id="homeConnect">Connect PiEEG</button>
@@ -45,6 +46,8 @@ export function mountHome(root, { engine, ui }) {
 
   const $ = (id) => root.querySelector('#' + id);
   const face = new HeadView($('homeFace'));
+  const hand = new HandView($('homeHand'));
+  engine.addEventListener('beat', () => hand.beat());
   let headMode = ui.headMode || 'contact';
   const smooth = new Float32Array(8);
   $('headMode').querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.v === headMode); b.addEventListener('click', () => { headMode = b.dataset.v; ui.headMode = headMode; $('headMode').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); face.mode = headMode === 'contact' ? 'contact' : 'value'; face.update(engine.quality); }); });
@@ -88,6 +91,14 @@ export function mountHome(root, { engine, ui }) {
     $('homeSim').disabled = streaming || engine.state === 'connecting';
     $('homeDisconnect').disabled = !engine.device;
     face.update(engine.quality);
+    const nGood = engine.quality ? engine.quality.filter((q) => q.status === 'good').length : 0;
+    $('capHeadDot').className = 'dot ' + (streaming ? (nGood === 8 ? 'on' : 'warn') : '');
+    $('capHead').textContent = streaming ? `${nGood}/8 contact` : 'not connected';
+    const f = engine.features, hconn = f.heart.connected || (engine.heart && engine.heart.connected);
+    const hstate = hconn && f.heart.bpm > 0 ? 'beating' : hconn ? 'idle' : 'off';
+    hand.setState(hstate);
+    $('capHandDot').className = 'dot ' + (hstate === 'beating' ? 'on' : hstate === 'idle' ? 'warn' : '');
+    $('capHand').textContent = hstate === 'beating' ? `${f.heart.bpm} bpm` : hstate === 'idle' ? 'no pulse' : 'no strap';
     CHECKS.forEach((c, i) => {
       const row = checkRows[i], pending = !streaming || (c.pending && c.pending());
       const ok = !pending && c.test();

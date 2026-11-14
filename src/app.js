@@ -8,7 +8,7 @@ import { mountRouting } from './pages/routing.js';
 const $ = (id) => document.getElementById(id);
 const engine = new Engine();
 const router = new Router(engine);
-const ui = { page: 'home', liveView: 'waves', display: null };
+const ui = { page: 'home', liveView: 'bands', display: null };
 
 // ── Config (userData/config.json) ──
 let saveTimer = null;
