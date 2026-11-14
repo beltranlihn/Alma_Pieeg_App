@@ -19,7 +19,7 @@ export class SpectrumView {
   draw() {
     const { ctx, w, h } = this, f = this.engine.features, fft = this.engine.fft;
     ctx.fillStyle = '#111111'; ctx.fillRect(0, 0, w, h);
-    const left = 56, top = 24, bottom = 28, gap = 32, barsW = Math.min(300, w * 0.28);
+    const left = 64, top = 56, bottom = 30, gap = 32, barsW = Math.min(300, w * 0.28);
     const plotW = w - left - gap - barsW - 16, plotH = h - top - bottom;
     const fx = (hz) => left + (hz / this.maxHz) * plotW;
     const lo = 1e-2, hi = 1e4;                               // µV²/Hz
@@ -30,7 +30,7 @@ export class SpectrumView {
       const x0 = fx(b.lo), x1 = fx(Math.min(b.hi, this.maxHz));
       ctx.fillStyle = BAND_COLOR[b.id] + '14'; ctx.fillRect(x0, top, x1 - x0, plotH);
       ctx.fillStyle = BAND_COLOR[b.id]; ctx.fillRect(x0, top + plotH - 2, x1 - x0, 2);
-      ctx.fillStyle = '#B8B8B8'; ctx.fillText(b.label, (x0 + x1) / 2, top - 8);
+      ctx.fillStyle = '#B8B8B8'; ctx.fillText(b.label, (x0 + x1) / 2, top - 10);
     });
     // grid
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
@@ -43,16 +43,16 @@ export class SpectrumView {
     for (let ch = 0; ch < CHANNELS; ch++) {
       if (!this.visible[ch]) continue;
       const psd = f.psd[ch];
-      ctx.strokeStyle = this.channelColors ? this.channelColors[ch] : `rgba(224,224,224,${0.35 + 0.5 * (ch / (CHANNELS - 1))})`; ctx.lineWidth = this.lineWidth; ctx.beginPath();
+      ctx.strokeStyle = this.channelColors ? this.channelColors[ch] : 'rgba(224,224,224,0.7)'; ctx.lineWidth = this.lineWidth; ctx.beginPath();
       for (let i = 1; i <= maxBin; i++) { const x = fx(i * df), y = fy(psd[i]); if (i === 1) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
       ctx.stroke();
     }
     // legend
-    ctx.textAlign = 'left'; let lx = left + 8;
-    for (let ch = 0; ch < CHANNELS; ch++) { ctx.fillStyle = !this.visible[ch] ? '#4a4a4a' : this.channelColors ? this.channelColors[ch] : `rgba(224,224,224,${0.35 + 0.5 * (ch / 7)})`; ctx.fillText(XR_FACE[ch].id, lx, top + 14); lx += 34; }
+    ctx.textAlign = 'left'; let lx = left;
+    for (let ch = 0; ch < CHANNELS; ch++) { ctx.fillStyle = !this.visible[ch] ? '#4a4a4a' : this.channelColors ? this.channelColors[ch] : '#E0E0E0'; ctx.fillRect(lx, 14, 8, 8); ctx.fillStyle = '#B8B8B8'; ctx.fillText(XR_FACE[ch].id, lx + 12, 22); lx += 52; }
     // band bars (relative, forehead average)
     const bx = left + plotW + gap, bw = barsW;
-    ctx.fillStyle = '#8C8C8C'; ctx.textAlign = 'left'; ctx.fillText('Relative power · forehead average', bx, top - 8);
+    ctx.fillStyle = '#8C8C8C'; ctx.textAlign = 'left'; ctx.fillText('Relative power · forehead average', bx, top - 10);
     const rowH = Math.min(44, plotH / BANDS.length);
     BANDS.forEach((b, i) => {
       const y = top + i * rowH, v = f.rel[b.id] || 0;

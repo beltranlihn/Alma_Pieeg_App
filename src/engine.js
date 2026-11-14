@@ -223,7 +223,8 @@ export class Engine extends EventTarget {
 
   // ── Session (participant + results + files) ────────────────────────────
   startSession(participant, notes) {
-    this.session.start(participant, notes); this.features.sessionActive = 1; this.features.result = [0, 0, 0];
+    this.session.start(participant, notes); this.features.sessionActive = 1;
+    const field = document.getElementById('participant'); if (field && !field.value && participant) field.value = participant; this.features.result = [0, 0, 0];
     this.recorder.start(); this._emit('recording'); this._emit('session');
   }
   async endSession() {

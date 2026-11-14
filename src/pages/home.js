@@ -30,7 +30,7 @@ export function mountHome(root, { engine, ui }) {
         <h2>Heart rate <button class="seg" id="antBtn">Start ANT+ stick</button></h2>
         <div class="rows" id="straps"></div>
         <div class="hint" id="antHint"></div>
-        <div class="rows"><div class="row"><div class="k">Bluetooth strap or watch</div><div class="v"><button class="seg" id="hHeartBtn">Connect</button></div></div></div>
+        <div class="rows"><div class="row"><div class="k">Bluetooth strap</div><div class="v"><button class="seg" id="hHeartBtn">Connect</button></div></div></div>
 
         <h2>Stream</h2>
         <div class="rows">

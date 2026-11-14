@@ -68,7 +68,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
         <div data-for="bands waves spectrum">
           <h2>Lines</h2>
           <div class="rows">
-            <div class="row"><div class="k">Line width</div><div class="seg-group" data-set="lineWidth"><button class="seg on" data-v="1">1</button><button class="seg" data-v="1.5">1.5</button><button class="seg" data-v="2">2 px</button></div></div>
+            <div class="row"><div class="k">Line width</div><div class="seg-group" data-set="lineWidth"><button class="seg on" data-v="1">1</button><button class="seg" data-v="2">2</button><button class="seg" data-v="3">3 px</button></div></div>
           </div>
         </div>
         <div data-for="waves spectrum">
@@ -82,10 +82,9 @@ export function mountLive(root, { engine, ui, saveConfig }) {
 
         <h2>Results</h2>
         <div class="rows" id="resultsCfg"></div>
-        <div class="hint">One signal, one way of reading it. Live above the views, by OSC as result1–3, and in the summary.</div>
         <h2>Last session</h2>
         <div class="rows" id="lastSession"><div class="row"><div class="k">—</div></div></div>
-        <div class="hint">Three files per session in Documents / EEG Alma Center / sessions: raw µV, features at 10 Hz, summary.</div>
+        <div class="hint">Saved in Documents / EEG Alma Center / sessions.</div>
       </aside>
     </section>`;
 
@@ -160,7 +159,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   const idxEl = $('indices');
   const idxRows = INDICES.map((i) => {
     const el = document.createElement('div'); el.className = 'index';
-    el.innerHTML = `<div class="index-head"><i class="swatch" style="background:${INDEX_COLOR[i.id]}"></i><b>${i.label}</b><span class="formula">${i.formula}</span><span class="raw"></span></div><div class="meter"><div class="meter-fill" style="background:${INDEX_COLOR[i.id]}"></div><div class="meter-mid"></div></div><div class="index-foot">${i.source} · 0–1 against this person's last minute</div>`;
+    el.innerHTML = `<div class="index-head"><i class="swatch" style="background:${INDEX_COLOR[i.id]}"></i><b>${i.label}</b><span class="formula">${i.formula}</span><span class="raw"></span></div><canvas class="spark"></canvas><div class="meter"><div class="meter-fill" style="background:${INDEX_COLOR[i.id]}"></div><div class="meter-mid"></div></div><div class="index-foot">${i.source} · 0–1 against this person's last minute · last 60 s</div>`;
     idxEl.appendChild(el); return el;
   });
   const blinkEl = document.createElement('div'); blinkEl.className = 'index index-blink';
@@ -177,12 +176,25 @@ export function mountLive(root, { engine, ui, saveConfig }) {
     $('indexRows').appendChild(row);
   });
 
+  const sparkHist = Object.fromEntries(INDICES.map((i) => [i.id, []]));
+  setInterval(() => { if (engine.state !== 'streaming') return; for (const i of INDICES) { const h = sparkHist[i.id]; h.push(engine.features.idxNorm[i.id]); if (h.length > 600) h.shift(); } }, 100);
+  function drawSpark(cv, hist, color) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(255,255,255,0.06)'; g.beginPath(); g.moveTo(0, h / 2 + 0.5); g.lineTo(w, h / 2 + 0.5); g.stroke();
+    if (hist.length < 2) return;
+    g.strokeStyle = color; g.lineWidth = 1.5; g.beginPath();
+    hist.forEach((v, k) => { const x = w - (hist.length - 1 - k) / 599 * w, y = h - 2 - v * (h - 4); k ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
   function refreshIndices() {
     const f = engine.features;
     INDICES.forEach((i, k) => {
       const el = idxRows[k], n = f.idxNorm[i.id], r = f.idx[i.id];
       el.querySelector('.meter-fill').style.width = `${(n * 100).toFixed(1)}%`;
-      el.querySelector('.raw').textContent = `${n.toFixed(2)} · raw ${r.toFixed(3)}`;
+      el.querySelector('.raw').innerHTML = `<b>${n.toFixed(2)}</b> <span>ratio ${r.toFixed(2)}</span>`;
+      drawSpark(el.querySelector('.spark'), sparkHist[i.id], INDEX_COLOR[i.id]);
     });
     const b = engine.blink;
     blinkEl.querySelector('.raw').textContent = `${b.count} · ${b.lastBlink ? `${((performance.now() - b.lastBlink) / 1000).toFixed(0)} s ago` : '—'} · ${b.threshold.toFixed(0)} µV`;

@@ -25,7 +25,7 @@ export class BandsView {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); this.w = r.width; this.h = r.height;
   }
   _sample() {
-    if (this.engine.state !== 'streaming') return;
+    if (this.engine.state !== 'streaming' || Date.now() - this.engine.startedAt < 3000) return;   // skip the filters' settling
     const f = this.engine.features;
     this.lanes.forEach((l, i) => { this.hist[i][this.pos] = l.get(f); });
     this.pos = (this.pos + 1) % (HISTORY_SEC * HZ);
@@ -34,7 +34,7 @@ export class BandsView {
   draw() {
     const { ctx, w, h } = this, f = this.engine.features, N = HISTORY_SEC * HZ;
     ctx.fillStyle = '#111111'; ctx.fillRect(0, 0, w, h);
-    const left = 170, right = 90, top = 16, bottom = 22, laneGap = 6;
+    const left = 170, right = 90, top = 16, bottom = 34, laneGap = 6;
     const shown = this.lanes.map((l, i) => i).filter((i) => !this.hidden.has(this.lanes[i].id));
     const laneH = (h - top - bottom) / Math.max(1, shown.length), plotW = w - left - right;
     ctx.font = '11px Geist, Inter, sans-serif';
@@ -57,6 +57,6 @@ export class BandsView {
       ctx.fillStyle = '#E0E0E0'; ctx.font = '600 13px Geist, Inter, sans-serif'; ctx.textAlign = 'right'; ctx.fillText(Number.isFinite(cur) ? l.fmt(cur) : '—', w - 16, y0 + laneH / 2 + 2);
     });
     ctx.fillStyle = '#8C8C8C'; ctx.font = '11px Geist, Inter, sans-serif'; ctx.textAlign = 'center';
-    for (let s = 0; s <= HISTORY_SEC; s += 15) ctx.fillText(s === 0 ? 'now' : `-${s} s`, left + plotW - (s / HISTORY_SEC) * plotW, h - 7);
+    for (let s = 0; s <= HISTORY_SEC; s += 15) ctx.fillText(s === 0 ? 'now' : `-${s} s`, left + plotW - (s / HISTORY_SEC) * plotW, h - 14);
   }
 }

@@ -4,7 +4,7 @@ export const PALETTES = [
   { id: 'mono', name: 'Mono', colors: ['#E0E0E0', '#E0E0E0', '#E0E0E0', '#E0E0E0', '#E0E0E0', '#E0E0E0', '#E0E0E0', '#E0E0E0'] },
   { id: 'sides', name: 'Left / right', colors: ['#7FB2E8', '#7FB2E8', '#7FB2E8', '#7FB2E8', '#E5B567', '#E5B567', '#E5B567', '#E5B567'] },
   { id: 'regions', name: 'Temples / forehead', colors: ['#C58BD0', '#C58BD0', '#E0E0E0', '#E0E0E0', '#E0E0E0', '#E0E0E0', '#C58BD0', '#C58BD0'] },
-  { id: 'spectrum', name: 'Rainbow', colors: ['#E06C6C', '#E0954B', '#E8C84B', '#4A8D6F', '#4FC3E8', '#7FB2E8', '#C58BD0', '#D06FB0'] },
+  { id: 'spectrum', name: 'Rainbow', colors: ['#E06C6C', '#E0954B', '#E8C84B', '#8FD16F', '#3FC7B2', '#4FA8F0', '#9B8CF0', '#E07FC8'] },
   { id: 'custom', name: 'Custom', colors: null },
 ];
 export const PALETTE_BY_ID = Object.fromEntries(PALETTES.map((p) => [p.id, p]));

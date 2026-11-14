@@ -10,14 +10,14 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 // Where each electrode sits, as a direction from the head centre: azimuth (°, negative = screen left,
 // mirror view: the wearer's left appears on the left) and elevation (° above the eye line).
 const DIRS = [
-  { az: -52, el: 16 },  // Ch1 left temple lower
-  { az: -50, el: 29 },  // Ch2 left temple upper
+  { az: -46, el: 16 },  // Ch1 left temple lower
+  { az: -45, el: 29 },  // Ch2 left temple upper
   { az: -27, el: 34 },  // Ch3 left forehead outer
   { az: -11, el: 37 },  // Ch4 left forehead inner
   { az: 11, el: 37 },   // Ch5 right forehead inner
   { az: 27, el: 34 },   // Ch6 right forehead outer
-  { az: 50, el: 29 },   // Ch7 right temple upper
-  { az: 52, el: 16 },   // Ch8 right temple lower
+  { az: 45, el: 29 },   // Ch7 right temple upper
+  { az: 46, el: 16 },   // Ch8 right temple lower
 ];
 const AUX = [{ az: -4, el: 46 }, { az: 4, el: 46 }];           // reference, bias
 const CUT_Y = -0.40;                                           // neck plane (head height = 2)
