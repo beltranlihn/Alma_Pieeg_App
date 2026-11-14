@@ -11,7 +11,7 @@
 </head>
 <body>
   <header>
-    <div class="brand">EEG Alma Center <span>0.6</span></div>
+    <div class="brand">EEG Alma Center <span>0.7</span></div>
     <nav>
       <button data-page="home">Home</button>
       <button data-page="live">Live</button>
@@ -26,8 +26,10 @@
       <div class="sb-field grow"><label for="notes">Notes</label><input type="text" id="notes" placeholder="Piece, condition, anything"></div>
       <div class="sb-meta" id="sessionMeta"></div>
       <div class="sb-clock" id="sessionClock"></div>
+      <div class="sb-cue" id="calCue"><b></b><span></span><div class="sb-clock"></div></div>
     </div>
     <div class="sb-right">
+      <button id="btnCal" disabled>Calibrate <kbd>C</kbd></button>
       <button id="btnMark" disabled>Mark <kbd>M</kbd></button>
       <button id="btnSession" class="action primary" disabled>Start session <kbd>R</kbd></button>
     </div>

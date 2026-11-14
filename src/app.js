@@ -4,6 +4,7 @@ import { Router } from './router.js';
 import { mountHome } from './pages/home.js';
 import { mountLive } from './pages/live.js';
 import { mountRouting } from './pages/routing.js';
+import { mountCalibration } from './calview.js';
 
 const $ = (id) => document.getElementById(id);
 const engine = new Engine();
@@ -27,6 +28,7 @@ const pages = {
   live: mountLive($('pageLive'), { engine, ui, saveConfig }),
   routing: mountRouting($('pageRouting'), { engine, router, saveConfig }),
 };
+mountCalibration({ engine, ui, saveConfig, panel: $('calPanel') });
 function show(page) {
   ui.page = page; saveConfig();
   for (const p of ['home', 'live', 'routing']) $('page' + p[0].toUpperCase() + p.slice(1)).classList.toggle('hidden', p !== page);
@@ -52,6 +54,11 @@ const flags = window.alma.flags || {};
 show(flags.page || ui.page || 'home');
 if (flags.sim && flags.session) setTimeout(() => { engine.startSession('test-person', 'self-test'); setTimeout(() => engine.endSession(), +flags.session * 1000); }, 2500);
 if (flags.sim) {
+  window.almaEngine = engine;                                   // for --probe in the self-test
   setTimeout(() => engine.connect('sim'), 300);
+  if (flags.calib) {                                            // --calib=<s>: rest, then eyes closed in the simulator
+    engine.addEventListener('calib', (e) => { const p = e.detail.phase; if (p === 'active') engine.device?.setEyes?.(true); if (p === 'done' || p === 'cancelled') engine.device?.setEyes?.(false); });
+    setTimeout(() => engine.startCalibration({ seconds: +flags.calib, task: 'eyes' }), 2500);
+  }
   if (flags.events) setTimeout(() => { engine.device?.trigger?.('blink'); setTimeout(() => engine.device?.trigger?.('blink'), 900); setTimeout(() => engine.device?.trigger?.('blink'), 1800); setTimeout(() => engine.device?.trigger?.('jaw'), 3000); setTimeout(() => engine.device?.trigger?.('left'), 4500); }, 2500);
 }

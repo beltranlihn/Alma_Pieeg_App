@@ -183,3 +183,13 @@ main { min-height: 0; }
 .vis-caption .sep { width: 1px; height: 14px; background: var(--line); margin: 0 8px; }
 .row.clickable .swatch { flex: none; margin-right: 0; }
 .row.off .swatch { opacity: 0.25; }
+
+/* calibration: cue line in the session bar, progress inside the button */
+.sb-cue { display: none; align-items: baseline; gap: 12px; flex: 1; min-width: 0; color: var(--ink-2); font-size: var(--fs-2); white-space: nowrap; }
+.sb-cue b { color: var(--ink); font-size: var(--fs-3); font-weight: 600; flex: none; }
+.sb-cue span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+body.calibrating .sb-left > :not(.sb-cue) { display: none; }
+body.calibrating .sb-cue { display: flex; }
+#btnCal.running { background: linear-gradient(90deg, var(--state-on) var(--p, 0%), var(--s2) var(--p, 0%)); color: var(--ink); }
+.live-side .row input[type=checkbox] { flex: none; }
+.live-side .row:not(.clickable) input[type=checkbox] { opacity: 0.3; }

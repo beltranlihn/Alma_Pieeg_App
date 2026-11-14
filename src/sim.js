@@ -1,5 +1,5 @@
 // Simulated PiEEG XR: 8 channels at 250 Hz with the artifacts we care about.
-// Keys while the simulator runs: B blink · J jaw clench · ← → eye movement · 1-8 toggle bad contact.
+// Keys while the simulator runs: B blink · J jaw clench · ← → eye movement · E eyes closed (alpha up) · 1-8 toggle bad contact.
 import { CHANNELS, SAMPLE_RATE } from './ble.js';
 
 export class SimDevice {
@@ -15,6 +15,7 @@ export class SimDevice {
     this.bad = new Set();
     this.events = [];           // { kind, t0 }
     this.alphaPhase = Math.random() * 6;
+    this.eyes = false;          // eyes closed: alpha ×2.5, as a calibration target
     this._onKey = this._onKey.bind(this);
   }
 
@@ -31,7 +32,7 @@ export class SimDevice {
       this.stats.samples += 5;
       if (this.onSamples) this.onSamples(samples, performance.now());
     }, 20);
-    if (this.onStatus) this.onStatus('Simulator running · B blink · J jaw · ←/→ eyes · 1-8 bad contact');
+    if (this.onStatus) this.onStatus('Simulator running · B blink · J jaw · ←/→ eyes · E eyes closed · 1-8 bad contact');
   }
 
   async stop() {
@@ -41,12 +42,14 @@ export class SimDevice {
   }
 
   trigger(kind) { this.events.push({ kind, t0: this.t }); }
+  setEyes(closed) { this.eyes = !!closed; }
 
   _onKey(e) {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     const k = e.key.toLowerCase();
     if (k === 'b') this.trigger('blink');
     else if (k === 'j') this.trigger('jaw');
+    else if (k === 'e') this.setEyes(!this.eyes);
     else if (e.key === 'ArrowLeft') this.trigger('left');
     else if (e.key === 'ArrowRight') this.trigger('right');
     else if (/^[1-8]$/.test(k)) { const ch = +k - 1; this.bad.has(ch) ? this.bad.delete(ch) : this.bad.add(ch); }
@@ -54,7 +57,7 @@ export class SimDevice {
 
   _sample(t) {
     const out = new Float32Array(CHANNELS);
-    const alphaAmp = 6 + 4 * Math.sin(t * 0.21 + this.alphaPhase);           // slow alpha waxing/waning
+    const alphaAmp = (6 + 4 * Math.sin(t * 0.21 + this.alphaPhase)) * (this.eyes ? 2.5 : 1);   // slow alpha waxing/waning
     const alpha = alphaAmp * Math.sin(2 * Math.PI * 10 * t);
     const theta = 3 * Math.sin(2 * Math.PI * 6.2 * t + 1);
     const beta = 2 * Math.sin(2 * Math.PI * 19 * t);

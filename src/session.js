@@ -26,6 +26,7 @@ export const FEATURE_COLUMNS = [
   { id: 'contact_good', get: (f) => f.contactGood },
   { id: 'dominant_hz', get: (f) => f.avg.dominant },
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ id: `strap${n}_bpm`, get: (f) => f.strap[n].bpm })),
+  { id: 'cal_score', get: (f) => f.cal.score },
 ];
 
 const WINDOW_S = 30, HZ = 10;

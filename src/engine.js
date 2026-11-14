@@ -11,6 +11,7 @@ import { INDICES, rawIndices, RollingNorm } from './indices.js';
 import { HeartDevice, SimHeart } from './heart.js';
 import { Session } from './session.js';
 import { SIGNAL_BY_ID } from './signals.js';
+import { Calibration } from './calibrate.js';
 
 export const FOREHEAD = [2, 3, 4, 5];
 
@@ -40,6 +41,7 @@ export class Engine extends EventTarget {
     this.fft = new FFT(256, this.fs);
     this.blink = new BlinkDetector(this.fs, FOREHEAD);
     this.norms = Object.fromEntries(INDICES.map((i) => [i.id, new RollingNorm(60, 10)]));
+    this.calib = new Calibration(CHANNELS);   // per-person REST / ACTIVE calibration (PiEEG Avatar Foundation)
     this.device = null;
     this.heart = null;
     this.straps = new Map();          // ANT+ id → { id, bpm, rr: [], lastBeat, lastSeen, beatCount, rssi }
@@ -72,6 +74,7 @@ export class Engine extends EventTarget {
       heart: { bpm: 0, rmssd: 0, beat: 0, connected: 0 },
       strap: Array.from({ length: 9 }, () => ({ bpm: 0, beat: 0, rmssd: 0, on: 0 })),   // index = slot, 0 unused
       result: [0, 0, 0], sessionElapsed: 0, sessionActive: 0,
+      cal: { score: 0, ready: this.calib && this.calib.result ? 1 : 0 },
     };
   }
 
@@ -86,7 +89,7 @@ export class Engine extends EventTarget {
     const dev = kind === 'ble' ? new PiEEGDevice() : new SimDevice();
     this.device = dev;
     dev.onStatus = (t) => { this.statusText = t; this._emit('state'); };
-    dev.onDisconnected = () => { this._setState('error', `${dev.name} disconnected`); this.device = null; this._emit('disconnected'); };
+    dev.onDisconnected = () => { this._setState('error', `${dev.name} disconnected`); this.device = null; this.cancelCalibration(); this._emit('disconnected'); };
     this.rings.reset(); this.clock.reset(); this.blink.reset(); for (const n of Object.values(this.norms)) n.reset();
     for (const c of this.chains) c.configure(this.filters);
     this.features = this._emptyFeatures(); this.quality = null;
@@ -109,7 +112,7 @@ export class Engine extends EventTarget {
   async disconnect() {
     if (!this.device) return;
     if (this.recorder.active) await this.stopRecording();
-    const d = this.device; this.device = null;
+    const d = this.device; this.device = null; this.cancelCalibration();
     await d.stop();
     this._setState('idle', 'No device');
   }
@@ -168,6 +171,7 @@ export class Engine extends EventTarget {
   _tick() {
     if (!this.device || this.rings.count < this.fs) return;
     const f = this.features, now = performance.now(), r = this.rings;
+    const calPhase = this.calib.tick(now); if (calPhase) this._onCalPhase(calPhase);
     if (this.blink.poll(r, now)) this._emit('blink', { count: this.blink.count, amplitude: this.blink.amplitude });
     f.blinkCount = this.blink.count; f.blinkPulse = this.blink.pulse(now); f.blinkAmp = this.blink.amplitude;
     for (let ch = 0; ch < CHANNELS; ch++) { f.rms[ch] = rms(r, ch, this.fs); f.env[ch] = envelope(r, ch, this.fs); }
@@ -191,9 +195,13 @@ export class Engine extends EventTarget {
       for (const i of INDICES) {
         const prev = f.idx[i.id] || raw[i.id];
         f.idx[i.id] = prev + (raw[i.id] - prev) * 0.18;                 // same EMA PiEEG uses
-        f.idxNorm[i.id] = this.norms[i.id].push(f.idx[i.id]);
+        const rolling = this.norms[i.id].push(f.idx[i.id]);           // keeps learning, used when not calibrated
+        const own = this.calib.result ? this.calib.normIndex(i.id, f.idx[i.id]) : null;
+        f.idxNorm[i.id] = own == null ? rolling : own;
       }
       f.calm = f.idx.calm;
+      if (this.calib.recording) this.calib.feed(f.bands, f.idx, this.quality && this.quality.map((q) => q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE));
+      f.cal.score = this.calib.score(f.bands); f.cal.ready = this.calib.result ? 1 : 0;
     }
     // straps by slot
     const wall = Date.now();
@@ -221,6 +229,22 @@ export class Engine extends EventTarget {
     this._emit('quality');
   }
 
+  // ── Calibration (REST / ACTIVE, per person) ────────────────────────────
+  startCalibration(opts = {}) {
+    if (this.state !== 'streaming') return false;
+    const participant = opts.participant ?? ((document.getElementById('participant') || {}).value || '').trim();
+    this.calib.start(performance.now(), { ...opts, participant });
+    if (this.recorder.active) this.mark('cal_start');
+    this._emit('calib', { phase: this.calib.phase }); return true;
+  }
+  cancelCalibration() { if (!this.calib.running) return; this.calib.cancel(); if (this.recorder.active) this.mark('cal_cancel'); this._emit('calib', { phase: 'cancelled' }); }
+  resetCalibration() { this.cancelCalibration(); this.calib.reset(); this.features.cal.score = 0; this.features.cal.ready = 0; this._emit('calib', { phase: 'reset' }); }
+  selectCalibration(list) { this.calib.select(list); this._emit('calib', { phase: 'selected' }); }
+  _onCalPhase(phase) {
+    if (this.recorder.active && (phase === 'rest' || phase === 'active' || phase === 'done')) this.mark(`cal_${phase}`);
+    this._emit('calib', { phase });
+  }
+
   // ── Session (participant + results + files) ────────────────────────────
   startSession(participant, notes) {
     this.session.start(participant, notes); this.features.sessionActive = 1;
@@ -235,7 +259,7 @@ export class Engine extends EventTarget {
     const who = (this.session.participant || 'session').trim().replace(/[^A-Za-z0-9._-]+/g, '-');
     const name = `${who}_${stamp}`;
     const meta = JSON.parse(this.recorder.toMeta({ device: this.deviceName, sample_rate: this.fs, filters: { ...this.filters }, contact_at_end: this.quality }));
-    const files = { '.raw.csv': this.recorder.toCSV(), '.features.csv': this.session.featuresCSV(), '.summary.json': JSON.stringify({ ...summary, device: this.deviceName, sample_rate: this.fs, filters: { ...this.filters }, marks: meta.marks, raw_samples: meta.samples }, null, 2) };
+    const files = { '.raw.csv': this.recorder.toCSV(), '.features.csv': this.session.featuresCSV(), '.summary.json': JSON.stringify({ ...summary, calibrated: !!this.calib.result, calibration: this.calib.toJSON(), device: this.deviceName, sample_rate: this.fs, filters: { ...this.filters }, marks: meta.marks, raw_samples: meta.samples }, null, 2) };
     let paths = [];
     try { paths = await window.alma.saveFiles(name, files); } catch (e) { this._emit('error', e); }
     this._emit('session'); this._emit('saved', { name, path: paths[0] || '', paths });

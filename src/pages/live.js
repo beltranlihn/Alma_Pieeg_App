@@ -80,6 +80,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
           </div>
         </div>
 
+        <div id="calPanel"></div>
         <h2>Results</h2>
         <div class="rows" id="resultsCfg"></div>
         <h2>Last session</h2>
@@ -159,7 +160,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   const idxEl = $('indices');
   const idxRows = INDICES.map((i) => {
     const el = document.createElement('div'); el.className = 'index';
-    el.innerHTML = `<div class="index-head"><i class="swatch" style="background:${INDEX_COLOR[i.id]}"></i><b>${i.label}</b><span class="formula">${i.formula}</span><span class="raw"></span></div><canvas class="spark"></canvas><div class="meter"><div class="meter-fill" style="background:${INDEX_COLOR[i.id]}"></div><div class="meter-mid"></div></div><div class="index-foot">${i.source} · 0–1 against this person's last minute · last 60 s</div>`;
+    el.innerHTML = `<div class="index-head"><i class="swatch" style="background:${INDEX_COLOR[i.id]}"></i><b>${i.label}</b><span class="formula">${i.formula}</span><span class="raw"></span></div><canvas class="spark"></canvas><div class="meter"><div class="meter-fill" style="background:${INDEX_COLOR[i.id]}"></div><div class="meter-mid"></div></div><div class="index-foot">${i.source} · 0–1 against this person's <span class="norm-mode">last minute</span> · last 60 s</div>`;
     idxEl.appendChild(el); return el;
   });
   const blinkEl = document.createElement('div'); blinkEl.className = 'index index-blink';
@@ -283,6 +284,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   }
   engine.addEventListener('state', refreshState); engine.addEventListener('quality', refreshQuality); engine.addEventListener('recording', refreshRec);
   engine.addEventListener('features', () => { if (view === 'indices' && !root.classList.contains('hidden')) refreshIndices(); });
+  engine.addEventListener('calib', () => root.querySelectorAll('.norm-mode').forEach((el) => { el.textContent = engine.calib.result ? 'calibration' : 'last minute'; }));
   engine.addEventListener('blink', () => { if (engine.recorder.active) scope.marks.push({ t: performance.now(), text: 'blink' }); });
   setView(view); refreshState(); refreshQuality();
   engine.addEventListener('state', () => { if (engine.state === 'connecting') bands.reset(); });

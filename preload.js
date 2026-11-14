@@ -5,10 +5,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 const argv = process.argv;
 const pageArg = argv.find((a) => a.startsWith('--page='));
 const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return a ? a.split('=')[1] : null; };
-const flags = { sim: argv.includes('--sim'), events: argv.includes('--events'), page: pageArg ? pageArg.split('=')[1] : null, preset: arg('preset'), view: arg('view'), session: arg('session') };
+const flags = { sim: argv.includes('--sim'), events: argv.includes('--events'), page: pageArg ? pageArg.split('=')[1] : null, preset: arg('preset'), view: arg('view'), session: arg('session'), calib: arg('calib') };
 
 contextBridge.exposeInMainWorld('alma', {
-  version: '0.6.0',
+  version: '0.7.0',
   flags,
   saveSession: (name, csvText, metaJson) => ipcRenderer.invoke('save-session', name, csvText, metaJson),
   saveFiles: (name, files) => ipcRenderer.invoke('save-files', name, files),

@@ -8,12 +8,14 @@ import { INDICES } from './indices.js';
 export const SIGNALS = [];
 const add = (id, label, group, unit, range, get, kind = 'continuous') => SIGNALS.push({ id, label, group, unit, range, get, kind });
 
-for (const i of INDICES) add(`idx.${i.id}`, `${i.label} · normalised to the last minute`, 'Indices (0–1, PiEEG formulas)', '0–1', [0, 1], (f) => f.idxNorm[i.id]);
+for (const i of INDICES) add(`idx.${i.id}`, `${i.label} · 0–1 for this person (calibration, or the last minute)`, 'Indices (0–1, PiEEG formulas)', '0–1', [0, 1], (f) => f.idxNorm[i.id]);
 for (const i of INDICES) add(`raw.${i.id}`, `${i.label} · raw ratio ${i.formula}`, 'Indices (raw ratios)', 'ratio', [0, 2], (f) => f.idx[i.id]);
 add('calm', 'Calm · α / (α + β), forehead (raw)', 'Indices (raw ratios)', '0–1', [0, 1], (f) => f.calm);
 for (const b of BANDS) add(`rel.${b.id}`, `${b.label} · relative power`, 'Bands (forehead average)', '0–1', [0, 1], (f) => f.rel[b.id]);
 for (const b of BANDS) add(`abs.${b.id}`, `${b.label} · absolute power`, 'Bands (forehead average)', 'µV²', [0, 200], (f) => f.avg[b.id]);
 add('dominant', 'Dominant frequency', 'Bands (forehead average)', 'Hz', [0, 40], (f) => f.avg.dominant);
+add('cal.score', 'Calibrated · 0 = your rest, 1 = your active', 'Calibration', '0–1', [0, 1], (f) => f.cal.score);
+add('cal.ready', 'Calibrated · done (1/0)', 'Calibration', '0/1', [0, 1], (f) => f.cal.ready, 'event');
 add('blink.pulse', 'Blink · pulse (1 for 150 ms)', 'Events', '0/1', [0, 1], (f) => f.blinkPulse, 'event');
 add('blink.count', 'Blink · count this session', 'Events', 'n', [0, 1000], (f) => f.blinkCount, 'event');
 add('blink.amplitude', 'Blink · frontal peak-to-peak', 'Events', 'µV', [0, 400], (f) => f.blinkAmp);

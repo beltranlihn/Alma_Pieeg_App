@@ -14,13 +14,18 @@ sent by OSC like everything else. Each item is done when it works with the real 
 
 | # | Item | What it gives | Source in PiEEG (MIT) | Output |
 |---|---|---|---|---|
-| 1 | **Per-person calibration** | 20 s REST + 20 s ACTIVE, ranks every channel × band by Cohen's d, picks the electrodes that separate best; indices then read against this person, not a rolling window | `experiences/avatar-foundation/neuro/engine.ts`, `README.md` §2 | Calibrate button with progress in the session bar; `calibrated` flag in the summary |
+| 1 | ✅ sim · **Per-person calibration** | 20 s REST + 20 s ACTIVE, ranks every channel × band by Cohen's d, picks the electrodes that separate best; indices then read against this person, not a rolling window | `experiences/avatar-foundation/neuro/engine.ts`, `README.md` §2 | Calibrate button with progress in the session bar; `calibrated` flag in the summary |
 | 2 | **Facial gestures** | Smile, brow up, frown, jaw, hard blink, winks, pucker. Common-average reference, 5 features per channel, one logistic detector per gesture (L2 + group-lasso), 6 reps of 2 s, leave-one-rep-out score, shows which electrodes matter | `experiences/face-trainer/*` | `face.smile` … events and 0–1 probabilities |
 | 3 | **Gaze from EOG** | Horizontal = right − left, vertical = common mode; ridge regression with a 5-point calibration that keeps learning. Left / centre / right is reliable; Quest 3 has no eye tracking | `experiences/eye-track/EyeTrack.tsx` | `gaze.x`, `gaze.y`, `gaze.side` |
 | 4 | **Muscle envelopes** | Per channel: detrend → rectify → 80 ms moving average; calibrated threshold with hysteresis. A continuous "tension" signal (jaw, brow) | `avatar-foundation/neuro/useArtifactEnvelopes.ts`, `engine-artifact.ts` | `tension.jaw`, `tension.brow`, per channel |
 | 5 | **New indices and result methods** | Frontal alpha asymmetry (ln α right − ln α left); beta spike and recovery to baseline (how fast someone comes back to calm) | `glitching-reality/useFAA.ts`, `premeditatio-malorum/useStoicBands.ts` | `idx.faa`; result method *Recovery* |
 | 6 | **More outputs** | WebSocket JSON and Lab Streaming Layer next to OSC | `pieeg_server/server.py`, `lsl.py` | Routing: destination type OSC / WebSocket / LSL |
 | 7 | **16 channels** | PiEEG XR-16 and Octopus-16 over Bluetooth (dual ADS1299) | `pieeg.js` device table, `lib/ironbciBle.ts` | Device picker on Home |
+
+**1 is built (0.7)** and tested with the simulator (eyes closed → alpha ranks first, `cal.score` 0 at rest and 1 with the
+eyes closed). Still to prove with the real mask: which electrodes and bands separate for eyes closed, count backwards and
+jaw tense, and whether 20 s is enough. Differences from PiEEG: no gain (1.0, so the score reads 0–1 between rest and
+active), channels with bad contact are left out, and the indices are normalised against the calibration.
 
 Left out on purpose: P300 and SSVEP (need repeated stimuli), webhooks, the LLM agent (later, once there is data).
 
@@ -38,3 +43,6 @@ OSC; their tools are eight separate pieces. Once this has run real sessions for 
 - propose it to Ildar and Youssef as a Windows companion app for PiEEG XR (docs link, Kickstarter use case);
 - offer the pieces they lack as pull requests if they prefer: generic OSC router, sessions and results,
   ANT+ / Bluetooth heart rate.
+- ask Youssef about the `invert` flag in Avatar Foundation: `linkFromRanked` sets `invert = d < 0`, but `evaluateLink`
+  already maps rest → 0 and active → 1 for either sign (it divides by `active − rest`), so inverting again seems to
+  flip negative-d links (active → 0). We do not invert.
