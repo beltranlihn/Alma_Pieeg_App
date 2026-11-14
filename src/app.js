@@ -1,174 +1,55 @@
-// EEG Alma Center — renderer entry. Wires source → DSP → rings → scope/quality/recorder → UI.
-import { PiEEGDevice, CHANNELS, SAMPLE_RATE } from './ble.js';
-import { SimDevice } from './sim.js';
-import { ChannelChain } from './dsp.js';
-import { Rings, SampleClock } from './ring.js';
-import { assessAll, STATUS } from './quality.js';
-import { Scope, XR_FACE } from './scope.js';
-import { Recorder } from './record.js';
+// EEG Alma Center — renderer entry: the engine, the router, the config and the three pages.
+import { Engine } from './engine.js';
+import { Router } from './router.js';
+import { mountHome } from './pages/home.js';
+import { mountLive } from './pages/live.js';
+import { mountRouting } from './pages/routing.js';
 
 const $ = (id) => document.getElementById(id);
-const fs = SAMPLE_RATE;
-const rings = new Rings(fs, 60);
-const clock = new SampleClock(fs);
-const chains = Array.from({ length: CHANNELS }, () => new ChannelChain(fs));
-const scope = new Scope($('scope'), rings);
-const recorder = new Recorder();
-let device = null;
-let quality = null;
-let rate = { samples: 0, t0: performance.now(), value: 0 };
-const filtTmp = new Float32Array(CHANNELS);
+const engine = new Engine();
+const router = new Router(engine);
+const ui = { page: 'home', liveView: 'waves', display: null };
 
-const log = (text) => { $('log').textContent = text; };
-const setStatus = (text, dotClass) => { $('statusText').textContent = text; $('statusDot').className = 'dot' + (dotClass ? ' ' + dotClass : ''); };
-
-// ── Source → pipeline ────────────────────────────────────────────────────────
-function onSamples(samples, arrivalMs) {
-  const stamps = clock.stamp(arrivalMs, samples.length);
-  for (let s = 0; s < samples.length; s++) {
-    const raw = samples[s];
-    for (let ch = 0; ch < CHANNELS; ch++) filtTmp[ch] = chains[ch].process(raw[ch]);
-    rings.push(raw, filtTmp);
-    recorder.push(stamps[s], raw);
-  }
-  rate.samples += samples.length;
+// ── Config (userData/config.json) ──
+let saveTimer = null;
+function saveConfig() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON() }, null, 2)), 300);
 }
+const cfg = await window.alma.loadConfig();
+if (cfg) { Object.assign(ui, cfg.ui || {}); if (cfg.filters) Object.assign(engine.filters, cfg.filters); router.fromJSON(cfg.router); }
 
-async function startSource(src) {
-  if (device) await stopSource();
-  device = src;
-  device.onStatus = (t) => { log(t); };
-  device.onDisconnected = () => { setStatus(`${device.name} · disconnected`, 'bad'); $('btnConnect').disabled = false; $('btnSim').disabled = false; };
-  rings.reset(); clock.reset(); applySettings();   // fresh filter state per connection
-  try {
-    await device.start(onSamples);
-  } catch (e) {
-    device = null;
-    setStatus(e && e.name === 'NotFoundError' ? 'No PiEEG found (is it powered? within 5 m? not taken by another app?)' : `Could not connect: ${e.message || e}`, 'bad');
-    log(String(e));
-    return;
-  }
-  setStatus(`${device.name} · streaming`, 'on');
-  $('empty').style.display = 'none';
-  $('btnConnect').disabled = true; $('btnSim').disabled = true; $('btnDisconnect').disabled = false;
-  $('btnRecord').disabled = false;
-  rate = { samples: 0, t0: performance.now(), value: 0 };
+// ── Pages ──
+if ((window.alma.flags || {}).view) ui.liveView = window.alma.flags.view;
+const pages = {
+  home: mountHome($('pageHome'), { engine, ui }),
+  live: mountLive($('pageLive'), { engine, ui, saveConfig }),
+  routing: mountRouting($('pageRouting'), { engine, router, saveConfig }),
+};
+function show(page) {
+  ui.page = page; saveConfig();
+  for (const p of ['home', 'live', 'routing']) $('page' + p[0].toUpperCase() + p.slice(1)).classList.toggle('hidden', p !== page);
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.page === page));
+  pages[page].onShow?.();
 }
+document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => show(b.dataset.page)));
 
-async function stopSource() {
-  if (!device) return;
-  if (recorder.active) await stopRecording();
-  await device.stop();
-  device = null;
-  setStatus('No device');
-  $('btnConnect').disabled = false; $('btnSim').disabled = false; $('btnDisconnect').disabled = true; $('btnRecord').disabled = true; $('btnMark').disabled = true;
+// ── Header status ──
+function refreshHeader() {
+  const streaming = engine.state === 'streaming';
+  $('hdrDot').className = 'dot ' + (streaming ? 'on' : engine.state === 'error' ? 'bad' : engine.state === 'connecting' ? 'warn' : '');
+  $('hdrText').textContent = streaming ? `${engine.deviceName} · ${engine.features.rate.toFixed(0)} /s · ${engine.features.contactGood}/8 contact${engine.recorder.active ? ' · recording' : ''}` : engine.statusText;
+  $('hdrConnect').textContent = engine.device ? 'Disconnect' : 'Connect PiEEG';
+  $('hdrConnect').disabled = engine.state === 'connecting';
 }
+$('hdrConnect').addEventListener('click', () => (engine.device ? engine.disconnect() : engine.connect('ble')));
+for (const ev of ['state', 'quality', 'recording', 'disconnected']) engine.addEventListener(ev, refreshHeader);
+refreshHeader();
 
-// ── Recording ────────────────────────────────────────────────────────────────
-function startRecording() {
-  recorder.start(); scope.marks = [];
-  $('btnRecord').textContent = 'Stop & save'; $('btnRecord').className = 'rec'; $('btnMark').disabled = false;
-  log('Recording…');
-}
-async function stopRecording() {
-  recorder.stop();
-  $('btnRecord').textContent = 'Record'; $('btnRecord').className = ''; $('btnMark').disabled = true;
-  if (recorder.rows.length === 0) return;
-  const stamp = new Date(recorder.startedAt);
-  const pad = (n) => String(n).padStart(2, '0');
-  const auto = `${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}_${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}`;
-  const typed = $('sessionName').value.trim();
-  const name = typed ? `${typed}_${auto}` : `session_${auto}`;
-  const meta = recorder.toMeta({ device: device ? device.name : 'unknown', sample_rate: fs, filters: currentFilters(), contact_at_end: quality });
-  try {
-    const path = await window.alma.saveSession(name, recorder.toCSV(), meta);
-    $('recSaved').textContent = name + '.csv'; $('recSaved').title = path;
-    log(`Saved ${path}`);
-  } catch (e) { log(`Save failed: ${e.message || e}`); }
-}
-function addMark(text) {
-  const m = recorder.mark(text);
-  if (!m) return;
-  scope.marks.push({ t: performance.now(), text: m.text });
-  log(`Mark "${m.text}" at ${recorder.seconds.toFixed(1)} s`);
-}
-
-// ── Settings ─────────────────────────────────────────────────────────────────
-const settings = { seconds: 8, scale: 100, source: 'filt', bandpass: 1, notch: 50, hampel: 1 };
-function currentFilters() { return { hampel: !!settings.hampel, bandpass: !!settings.bandpass, low: 1, high: 40, notch: settings.notch }; }
-function applySettings() {
-  scope.seconds = settings.seconds; scope.scaleUv = settings.scale; scope.source = settings.source;
-  for (const c of chains) c.configure(currentFilters());
-}
-document.querySelectorAll('.seg-group').forEach((group) => {
-  const key = group.dataset.set;
-  group.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => {
-    group.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === btn));
-    const v = btn.dataset.v; settings[key] = isNaN(+v) ? v : +v; applySettings();
-  }));
-});
-
-// ── Contact panel ────────────────────────────────────────────────────────────
-const contactEl = $('contact');
-const contactRows = XR_FACE.map((e, ch) => {
-  const row = document.createElement('div'); row.className = 'row';
-  row.innerHTML = `<div class="dot"></div><div class="k"><b>${e.id}</b> · ${e.place}</div><div class="line"></div><div class="v"></div>`;
-  contactEl.appendChild(row);
-  return { dot: row.children[0], line: row.children[2], v: row.children[3] };
-});
-const STATUS_LABEL = { good: 'good', fair: 'fair', poor: 'poor', railed: 'railed', none: 'no contact', wait: '…' };
-const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '' };
-function refreshContact() {
-  if (!device) return;
-  quality = assessAll(rings, fs); scope.quality = quality;
-  let good = 0;
-  quality.forEach((q, ch) => {
-    const r = contactRows[ch];
-    r.dot.className = 'dot ' + STATUS_DOT[q.status];
-    r.line.textContent = q.status === STATUS.WAIT ? '' : `hum ${q.line.toFixed(0)}`;
-    r.v.textContent = q.status === STATUS.WAIT ? '…' : `${q.rms.toFixed(0)} µV · ${STATUS_LABEL[q.status]}`;
-    if (q.status === STATUS.GOOD) good++;
-  });
-  const waiting = quality[0].status === STATUS.WAIT;
-  $('contactSummary').textContent = waiting ? 'Streams a second of signal before judging.' : `${good}/${CHANNELS} good · rms of the filtered trace, hum = 50/60 Hz amplitude on the raw trace`;
-}
-
-// ── Loops ────────────────────────────────────────────────────────────────────
-function frame() {
-  scope.draw(performance.now());
-  if (recorder.active) { $('recTime').textContent = `${recorder.seconds.toFixed(1)} s`; $('recSamples').textContent = String(recorder.rows.length); $('recMarks').textContent = String(recorder.marks.length); }
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-setInterval(refreshContact, 300);
-setInterval(() => {
-  const now = performance.now(), dt = (now - rate.t0) / 1000;
-  if (dt >= 1) { rate.value = rate.samples / dt; rate.samples = 0; rate.t0 = now; }
-  $('statRate').textContent = device ? `${rate.value.toFixed(0)} /s` : '—';
-  if (device) { $('statNotif').textContent = String(device.stats.notifications); $('statLen').textContent = `${device.stats.lastLen} B${device.stats.oddBytes ? ' (!' + device.stats.oddBytes + ' odd)' : ''}`; }
-  $('statSpikes').textContent = String(chains.reduce((a, c) => a + c.hampel.replaced, 0));
-}, 1000);
-
-// ── Buttons and keys ─────────────────────────────────────────────────────────
-$('btnConnect').addEventListener('click', () => {
-  if (!PiEEGDevice.supported()) { setStatus('Web Bluetooth is not available in this window', 'bad'); return; }
-  startSource(new PiEEGDevice());
-});
-$('btnSim').addEventListener('click', () => startSource(new SimDevice()));
-$('btnDisconnect').addEventListener('click', stopSource);
-$('btnRecord').addEventListener('click', () => (recorder.active ? stopRecording() : startRecording()));
-$('btnMark').addEventListener('click', () => addMark('mark'));
-$('btnFolder').addEventListener('click', () => window.alma.openSessionsFolder());
-window.addEventListener('keydown', (e) => {
-  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-  if (e.key.toLowerCase() === 'm') addMark('mark');
-  if (e.key.toLowerCase() === 'r' && device) (recorder.active ? stopRecording() : startRecording());
-});
-window.alma.sessionsDir().then((d) => { $('btnFolder').title = d; });
-applySettings();
-
-// Dev harness: `npm start -- --sim` starts the simulator at once (used by the screenshot self-test).
-if (window.alma.flags && window.alma.flags.sim) {
-  setTimeout(() => startSource(new SimDevice()), 300);
-  if (window.alma.flags.events) setTimeout(() => { device?.trigger?.('blink'); setTimeout(() => device?.trigger?.('jaw'), 1500); setTimeout(() => device?.trigger?.('left'), 3200); }, 2500);
+const flags = window.alma.flags || {};
+if (flags.preset) { const { PRESETS } = await import('./signals.js'); const p = PRESETS.find((x) => x.id === flags.preset); if (p) router.loadPreset(p); }
+show(flags.page || ui.page || 'home');
+if (flags.sim) {
+  setTimeout(() => engine.connect('sim'), 300);
+  if (flags.events) setTimeout(() => { engine.device?.trigger?.('blink'); setTimeout(() => engine.device?.trigger?.('blink'), 900); setTimeout(() => engine.device?.trigger?.('blink'), 1800); setTimeout(() => engine.device?.trigger?.('jaw'), 3000); setTimeout(() => engine.device?.trigger?.('left'), 4500); }, 2500);
 }

@@ -4,7 +4,7 @@ Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and 
 face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
 *Soul Charger* VR experience, but meant to send anything to anything: OSC, WebSocket, files.
 
-Status: **0.1 · F0 "See"**: connect, scope, contact quality, record. Roadmap in
+Status: **0.2**: Home (3D head with contact), Live (waves, bands, spectrum, indices), Routing (OSC to any number of destinations, presets), heart-rate straps over Bluetooth, sessions. Roadmap in
 `VR Unreal/docs/EEG-ALMA-CENTER-INVESTIGACION-Y-PLAN.md` (§8).
 
 ## Run
@@ -43,12 +43,20 @@ Design follows the VEATION design system (`assets/tokens.css`, Geist): grey surf
 | `src/quality.js` | contact status per channel from rms, mains hum and railing |
 | `src/scope.js` | the oscilloscope (Canvas 2D, 60 fps) with the XR Face electrode names |
 | `src/record.js` | CSV + JSON session recorder with marks |
-| `src/app.js` | wiring and UI |
+| `src/engine.js` | the pipeline: source → DSP → rings → features (bands, indices, blink, heart) |
+| `src/head.js` | 3D head (three.js) with the electrodes and the contact heat map |
+| `src/indices.js`, `src/fft.js`, `src/detect.js` | PiEEG-style indices, FFT and band powers, blink detector |
+| `src/signals.js`, `src/router.js`, `osc-encode.js` | the signal catalogue, the OSC router and the encoder |
+| `src/heart.js` | heart rate over the standard Bluetooth Heart Rate service |
+| `src/pages/*.js` | Home, Live, Routing |
+| `src/app.js` | wiring, config persistence (userData/config.json) |
 
 Electrode map (PiEEG XR): Ch1–2 left temple (lower, upper) · Ch3–4 left forehead · Ch5–6 right forehead ·
 Ch7–8 right temple (upper, lower) · reference and bias at the centre of the forehead.
 
 ## Credits
+
+3D head: Lee Perry-Smith head scan by Infinite-Realities (CC-BY), as shipped with the three.js examples. three.js (MIT) is vendored in `assets/vendor`.
 
 Protocol and the shape of the detectors follow PiEEG's open-source work (MIT): https://github.com/pieeg-club/PiEEG-server.
 Not a medical device. Research and art use only.

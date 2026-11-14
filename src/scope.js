@@ -15,7 +15,7 @@ export const XR_FACE = [
 export class Scope {
   constructor(canvas, rings) {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.rings = rings;
-    this.seconds = 8; this.scaleUv = 100; this.source = 'filt'; this.quality = null; this.marks = [];
+    this.seconds = 8; this.scaleUv = 100; this.source = 'filt'; this.quality = null; this.marks = []; this.visible = null; this.channelColors = null; this.lineWidth = 1; this.grid = true;
     this.colors = { bg: '#111111', line: 'rgba(255,255,255,0.10)', lineSoft: 'rgba(255,255,255,0.05)', ink: '#E0E0E0', ink3: '#8C8C8C', dim: '#6D6D6D', trace: '#E0E0E0', traceBad: '#8C8C8C', mark: '#E5B567' };
     this._resize = this._resize.bind(this);
     window.addEventListener('resize', this._resize);
@@ -36,7 +36,7 @@ export class Scope {
     ctx.fillStyle = this.colors.bg; ctx.fillRect(0, 0, w, h);
     // time grid: one line per second
     ctx.strokeStyle = this.colors.lineSoft; ctx.lineWidth = 1;
-    for (let s = 0; s <= this.seconds; s++) {
+    for (let s = 0; this.grid && s <= this.seconds; s++) {
       const x = left + plotW - (s / this.seconds) * plotW;
       ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, top); ctx.lineTo(Math.round(x) + 0.5, h - bottom); ctx.stroke();
     }
@@ -57,13 +57,14 @@ export class Scope {
       ctx.fillStyle = this.colors.ink3; ctx.font = '11px Geist, Inter, sans-serif';
       ctx.fillText(XR_FACE[ch].place, 14, y0 + 12);
       if (q && q.status !== 'wait') { ctx.textAlign = 'right'; ctx.fillStyle = this.colors.dim; ctx.fillText(`${q.rms.toFixed(0)} µV`, left - 10, y0 + 4); }
-      if (n < 2) continue;
+      if (n < 2 || (this.visible && !this.visible[ch])) continue;
       const arr = buf[ch];
       let mean = 0;
       if (this.source === 'raw') { for (let i = 0; i < n; i += step) mean += arr[(start + i) % size]; mean /= Math.ceil(n / step); }
       const gain = (laneH * 0.45) / this.scaleUv;
-      ctx.strokeStyle = q && (q.status === 'poor' || q.status === 'railed' || q.status === 'none') ? this.colors.traceBad : this.colors.trace;
-      ctx.lineWidth = 1; ctx.beginPath();
+      const bad = q && (q.status === 'poor' || q.status === 'railed' || q.status === 'none');
+      ctx.strokeStyle = bad ? this.colors.traceBad : (this.channelColors ? this.channelColors[ch] : this.colors.trace);
+      ctx.lineWidth = this.lineWidth; ctx.beginPath();
       for (let i = 0; i < n; i += step) {
         const v = arr[(start + i) % size] - mean;
         const x = left + (i / n) * plotW, y = y0 - Math.max(-laneH * 0.5, Math.min(laneH * 0.5, v * gain));

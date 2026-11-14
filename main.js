@@ -1,41 +1,36 @@
 // EEG Alma Center — main process.
-// Owns the window, the Bluetooth device chooser (Web Bluetooth needs a host handler in Electron)
-// and the session files on disk. Everything else (BLE, DSP, drawing) lives in the renderer.
+// Owns the window, the Bluetooth device chooser (Web Bluetooth needs a host handler in Electron),
+// the config file, the session files and the OSC/UDP sockets. BLE, DSP and drawing live in the renderer.
 'use strict';
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const dgram = require('dgram');
+const { encode } = require('./osc-encode.js');
 
 let win = null;
 let pendingBleCallback = null;   // Chromium re-emits select-bluetooth-device as devices appear
+let bleKind = 'pieeg';           // what the renderer is about to request: 'pieeg' | 'heart'
+let udp = null;
+const oscStats = { sent: 0, errors: 0 };
 
 function sessionsDir() {
   const dir = path.join(app.getPath('documents'), 'EEG Alma Center', 'sessions');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
-
-function safeName(name) {
-  return String(name || 'session').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80);
-}
+function configPath() { return path.join(app.getPath('userData'), 'config.json'); }
+function safeName(name) { return String(name || 'session').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80); }
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1480,
-    height: 920,
-    minWidth: 1100,
-    minHeight: 680,
-    backgroundColor: '#111111',
-    title: 'EEG Alma Center',
-    autoHideMenuBar: true,
+    width: 1480, height: 920, minWidth: 1100, minHeight: 680,
+    backgroundColor: '#111111', title: 'EEG Alma Center', autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       additionalArguments: process.argv.filter((a) => a.startsWith('--')),   // flags reach the preload
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      spellcheck: false,
+      contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false,
       backgroundThrottling: false,   // the scope and the BLE loop must not slow down when hidden
     },
   });
@@ -44,13 +39,9 @@ function createWindow() {
   // list of advertising devices and we pick the PiEEG. Without this handler nothing connects.
   win.webContents.on('select-bluetooth-device', (event, devices, callback) => {
     event.preventDefault();
-    const pick = devices.find((d) => /pieeg|ironbci|eareeg/i.test(d.deviceName || ''));
-    if (pick) {
-      pendingBleCallback = null;
-      callback(pick.deviceId);
-    } else {
-      pendingBleCallback = callback;   // keep scanning; the event fires again with more devices
-    }
+    const pick = bleKind === 'heart' ? devices[0] : devices.find((d) => /pieeg|ironbci|eareeg/i.test(d.deviceName || ''));
+    if (pick) { pendingBleCallback = null; callback(pick.deviceId); }
+    else pendingBleCallback = callback;   // keep scanning; the event fires again with more devices
   });
 
   win.loadFile('index.html');
@@ -69,22 +60,43 @@ function createWindow() {
   }
 }
 
-ipcMain.on('ble-cancel', () => {
-  if (pendingBleCallback) { pendingBleCallback(''); pendingBleCallback = null; }
-});
-
+// ── IPC: Bluetooth, sessions, config ──────────────────────────────────────────
+ipcMain.on('ble-kind', (_e, kind) => { bleKind = kind === 'heart' ? 'heart' : 'pieeg'; });
+ipcMain.on('ble-cancel', () => { if (pendingBleCallback) { pendingBleCallback(''); pendingBleCallback = null; } });
 ipcMain.handle('sessions-dir', () => sessionsDir());
-
 ipcMain.handle('save-session', async (_e, name, csvText, metaJson) => {
-  const dir = sessionsDir();
-  const base = safeName(name);
-  const csvPath = path.join(dir, base + '.csv');
+  const dir = sessionsDir(), base = safeName(name), csvPath = path.join(dir, base + '.csv');
   await fs.promises.writeFile(csvPath, csvText, 'utf8');
   if (metaJson) await fs.promises.writeFile(path.join(dir, base + '.json'), metaJson, 'utf8');
   return csvPath;
 });
-
+ipcMain.handle('list-sessions', async () => {
+  const dir = sessionsDir();
+  const names = (await fs.promises.readdir(dir)).filter((n) => n.endsWith('.csv'));
+  const out = [];
+  for (const n of names) { const st = await fs.promises.stat(path.join(dir, n)); out.push({ name: n, size: st.size, mtime: st.mtimeMs }); }
+  return out.sort((a, b) => b.mtime - a.mtime);
+});
 ipcMain.handle('open-sessions-folder', () => shell.openPath(sessionsDir()));
+ipcMain.handle('config-load', async () => {
+  try { return JSON.parse(await fs.promises.readFile(configPath(), 'utf8')); } catch (_) { return null; }
+});
+ipcMain.handle('config-save', async (_e, json) => { await fs.promises.writeFile(configPath(), json, 'utf8'); return configPath(); });
+
+// ── IPC: OSC over UDP ─────────────────────────────────────────────────────────
+function socket() {
+  if (!udp) { udp = dgram.createSocket('udp4'); udp.on('error', () => { oscStats.errors++; }); }
+  return udp;
+}
+/** messages: [{ host, port, address, args: [{type, value}] }] — one UDP datagram each. */
+ipcMain.on('osc-send', (_e, messages) => {
+  const s = socket();
+  for (const m of messages) {
+    try { s.send(encode(m.address, m.args), m.port, m.host, (err) => { if (err) oscStats.errors++; else oscStats.sent++; }); }
+    catch (_) { oscStats.errors++; }
+  }
+});
+ipcMain.handle('osc-stats', () => ({ ...oscStats }));
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());

@@ -5,112 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EEG Alma Center</title>
 <link rel="stylesheet" href="assets/tokens.css">
-<style>
-  /* EEG Alma Center · follows the VEATION design system: grey surfaces, Geist, amber only as a point. */
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; background: var(--s0); color: var(--ink); font-family: var(--font-sans); font-size: 12px; line-height: 16px; -webkit-font-smoothing: antialiased; user-select: none; }
-  body { display: grid; grid-template-rows: 44px 1fr 28px; grid-template-columns: 1fr 320px; grid-template-areas: "top top" "scope side" "foot foot"; height: 100vh; overflow: hidden; }
-
-  header { grid-area: top; display: flex; align-items: center; gap: 16px; padding: 0 16px; background: var(--s1); border-bottom: 1px solid var(--line); }
-  header .brand { font-weight: 600; font-size: 13px; letter-spacing: -0.2px; }
-  header .brand span { color: var(--ink-3); font-weight: 400; margin-left: 8px; }
-  header .status { display: flex; align-items: center; gap: 8px; color: var(--ink-2); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-dim); flex: none; }
-  .dot.on { background: var(--toggle-on); }
-  .dot.warn { background: var(--auto-ovr); }
-  .dot.bad { background: var(--danger); }
-
-  button { font: inherit; color: var(--ink); background: var(--s2); border: 0; border-radius: var(--radius-2); padding: 6px 12px; cursor: pointer; }
-  button:hover { background: var(--state-hover); }
-  button:disabled { color: var(--ink-dim); cursor: default; background: var(--s2); }
-  button.primary { background: var(--ink); color: var(--s0); font-weight: 600; }
-  button.primary:hover { background: #ffffff; }
-  button.rec { background: var(--danger); color: var(--s0); font-weight: 600; }
-  button.seg { padding: 4px 8px; color: var(--ink-2); }
-  button.seg.on { background: var(--state-on); color: var(--ink); }
-  input[type=text] { font: inherit; color: var(--ink); background: var(--s0); border: 1px solid var(--line); border-radius: var(--radius-2); padding: 5px 8px; width: 100%; }
-  input[type=text]:focus { outline: none; border-color: var(--line-strong); }
-
-  main { grid-area: scope; position: relative; min-width: 0; }
-  main canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  main .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--ink-3); pointer-events: none; }
-  main .empty b { color: var(--ink-2); font-weight: 600; font-size: 14px; }
-
-  aside { grid-area: side; background: var(--s1); border-left: 1px solid var(--line); overflow-y: auto; }
-  aside h2 { margin: 0; padding: 14px 16px 6px; font-size: 11px; font-weight: 400; letter-spacing: 2px; text-transform: uppercase; color: var(--ink-3); }
-  .rows { margin: 0 16px; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; padding: 4px 0; border-top: 1px solid var(--line-soft); }
-  .row:first-child { border-top: 0; }
-  .row .k { color: var(--ink-2); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row .v { color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
-  .row .v.dim { color: var(--ink-3); }
-  .row .seg-group { display: flex; gap: 2px; }
-  .contact .row { min-height: 26px; }
-  .contact .v { min-width: 56px; }
-  .contact .line { color: var(--ink-3); min-width: 44px; }
-  .stack { display: flex; flex-direction: column; gap: 8px; padding: 8px 16px 12px; }
-  .stack .two { display: flex; gap: 8px; }
-  .stack .two > * { flex: 1; }
-  .hint { color: var(--ink-3); padding: 0 16px 10px; }
-  kbd { font: inherit; color: var(--ink-2); background: var(--s2); border-radius: 2px; padding: 0 4px; }
-
-  footer { grid-area: foot; display: flex; align-items: center; gap: 24px; padding: 0 16px; background: var(--s1); border-top: 1px solid var(--line); color: var(--ink-3); white-space: nowrap; overflow: hidden; }
-  footer span b { color: var(--ink-2); font-weight: 400; font-variant-numeric: tabular-nums; }
-  footer .log { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
-</style>
+<link rel="stylesheet" href="assets/app.css">
+<script type="importmap">{ "imports": { "three": "./assets/vendor/three.module.js", "three/addons/": "./assets/vendor/addons/" } }</script>
 </head>
 <body>
   <header>
-    <div class="brand">EEG Alma Center <span>0.1</span></div>
-    <div class="status"><div class="dot" id="statusDot"></div><div id="statusText">No device</div></div>
-    <button id="btnConnect" class="primary">Connect PiEEG</button>
-    <button id="btnSim">Simulator</button>
-    <button id="btnDisconnect" disabled>Disconnect</button>
+    <div class="brand">EEG Alma Center <span>0.2</span></div>
+    <nav>
+      <button data-page="home">Home</button>
+      <button data-page="live">Live</button>
+      <button data-page="routing">Routing</button>
+    </nav>
+    <div class="status"><div class="dot" id="hdrDot"></div><div id="hdrText">No device</div></div>
+    <button id="hdrConnect" class="primary">Connect PiEEG</button>
   </header>
-
   <main>
-    <canvas id="scope"></canvas>
-    <div class="empty" id="empty"><b>Nothing streaming</b><div>Power the PiEEG from a battery, put the mask on, then press Connect. Or run the Simulator.</div></div>
+    <div class="page" id="pageHome"></div>
+    <div class="page hidden" id="pageLive"></div>
+    <div class="page hidden" id="pageRouting"></div>
   </main>
-
-  <aside>
-    <h2>Contact</h2>
-    <div class="rows contact" id="contact"></div>
-    <div class="hint" id="contactSummary">Streams a second of signal before judging.</div>
-
-    <h2>Display</h2>
-    <div class="rows">
-      <div class="row"><div class="k">Window</div><div class="seg-group" data-set="seconds"><button class="seg" data-v="4">4 s</button><button class="seg on" data-v="8">8 s</button><button class="seg" data-v="16">16 s</button></div></div>
-      <div class="row"><div class="k">Scale</div><div class="seg-group" data-set="scale"><button class="seg" data-v="50">50</button><button class="seg on" data-v="100">100</button><button class="seg" data-v="200">200</button><button class="seg" data-v="500">500 µV</button></div></div>
-      <div class="row"><div class="k">Trace</div><div class="seg-group" data-set="source"><button class="seg on" data-v="filt">Filtered</button><button class="seg" data-v="raw">Raw</button></div></div>
-      <div class="row"><div class="k">Band-pass 1–40 Hz</div><div class="seg-group" data-set="bandpass"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
-      <div class="row"><div class="k">Notch</div><div class="seg-group" data-set="notch"><button class="seg on" data-v="50">50 Hz</button><button class="seg" data-v="60">60 Hz</button><button class="seg" data-v="0">Off</button></div></div>
-      <div class="row"><div class="k">Spike rejection (Hampel)</div><div class="seg-group" data-set="hampel"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
-    </div>
-
-    <h2>Recording</h2>
-    <div class="stack">
-      <input type="text" id="sessionName" placeholder="Session name (e.g. beltran-eyes-open)">
-      <div class="two"><button id="btnRecord" disabled>Record</button><button id="btnMark" disabled>Mark <kbd>M</kbd></button></div>
-      <div class="rows">
-        <div class="row"><div class="k">Duration</div><div class="v" id="recTime">0.0 s</div></div>
-        <div class="row"><div class="k">Samples</div><div class="v" id="recSamples">0</div></div>
-        <div class="row"><div class="k">Marks</div><div class="v" id="recMarks">0</div></div>
-        <div class="row"><div class="k">Last saved</div><div class="v dim" id="recSaved">—</div></div>
-      </div>
-      <button id="btnFolder">Open sessions folder</button>
-    </div>
-    <div class="hint">Raw µV per sample, one CSV per session plus a JSON with the marks. Same layout as PiEEG's recordings, so PiEEG Studio opens them.</div>
-  </aside>
-
-  <footer>
-    <span>Rate <b id="statRate">—</b></span>
-    <span>Notifications <b id="statNotif">0</b></span>
-    <span>Last packet <b id="statLen">—</b></span>
-    <span>Spikes replaced <b id="statSpikes">0</b></span>
-    <div class="log" id="log"></div>
-  </footer>
-
   <script type="module" src="src/app.js"></script>
 </body>
 </html>
