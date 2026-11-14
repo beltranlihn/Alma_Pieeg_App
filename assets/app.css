@@ -159,10 +159,11 @@ main { min-height: 0; }
 .result-value.is-empty { color: var(--ink-dim); }
 
 /* Home visual: head and hand side by side */
-.home-visual { display: grid; grid-template-columns: 2fr 1fr; gap: 0; width: 100%; flex: 1; min-height: 0; }
+.home-visual { display: grid; grid-template-columns: 1fr; gap: 0; width: 100%; flex: 1; min-height: 0; }
 .vis-cell { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .vis-cell .stage { position: relative; flex: 1; min-height: 0; }
 .vis-cell .stage canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
 .vis-caption { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 0 4px; color: var(--ink-2); }
 .vis-caption b { color: var(--ink); font-weight: 600; font-size: var(--fs-2); }
 .vis-caption .big { font-size: var(--fs-3); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.vis-caption .sep { width: 1px; height: 14px; background: var(--line); margin: 0 8px; }
