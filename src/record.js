@@ -29,7 +29,7 @@ export class Recorder {
   }
   toMeta(extra = {}) {
     return JSON.stringify({
-      format: 'eeg-alma-center-session:v1', app: 'EEG Alma Center 0.1.0',
+      format: 'eeg-alma-center-session:v1', app: `EEG Alma Center ${(typeof window !== 'undefined' && window.alma && window.alma.version) || ''}`.trim(),
       started_at: new Date(this.startedAt).toISOString(), duration_sec: +this.seconds.toFixed(3), samples: this.rows.length,
       channels: CHANNELS, units: 'uV', columns: ['timestamp(unix s)', 'ch1..ch8 raw uV', 'mark'],
       electrode_map: ['left temple lower', 'left temple upper', 'left forehead', 'left forehead', 'right forehead', 'right forehead', 'right temple upper', 'right temple lower'],

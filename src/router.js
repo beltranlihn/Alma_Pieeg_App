@@ -27,7 +27,7 @@ export class Router {
   }
   removeDestination(id) { this.destinations = this.destinations.filter((d) => d.id !== id); this.mappings = this.mappings.filter((m) => m.destination !== id); this.syncOutputs(); }
   /** Open the WebSocket listeners of the enabled WebSocket destinations, close the rest. */
-  syncOutputs() { if (window.alma.wsSync) window.alma.wsSync(this.enabled ? this.destinations.filter((d) => d.kind === 'ws' && d.enabled).map((d) => ({ host: d.host, port: d.port })) : []); }
+  syncOutputs() { if (typeof window !== 'undefined' && window.alma && window.alma.wsSync) window.alma.wsSync(this.enabled ? this.destinations.filter((d) => d.kind === 'ws' && d.enabled).map((d) => ({ host: d.host, port: d.port })) : []); }
   addMapping(m = {}) {
     const sig = SIGNAL_BY_ID[m.signal || 'calm'];
     const map = { id: uid(), signal: 'calm', address: '/alma/calm', destination: this.destinations[0]?.id || null, type: 'f',
@@ -35,6 +35,28 @@ export class Router {
     this.mappings.push(map); return map;
   }
   removeMapping(id) { this.mappings = this.mappings.filter((m) => m.id !== id); }
+  /** A copy right below the original. */
+  duplicateMapping(id) {
+    const k = this.mappings.findIndex((m) => m.id === id); if (k < 0) return null;
+    const copy = { ...this.mappings[k], id: uid() }; this.mappings.splice(k + 1, 0, copy); return copy;
+  }
+
+  /** The routing table as a file (temporary self-test destinations left out). */
+  exportJSON() { return JSON.stringify({ format: 'eeg-alma-center-routing:v1', exported_at: new Date().toISOString(), ...this.toJSON() }, null, 2); }
+  /** Adds the destinations and mappings of an exported file to the ones here (never replaces). */
+  importJSON(text) {
+    const j = JSON.parse(text);
+    if (!j || !Array.isArray(j.destinations) || !Array.isArray(j.mappings)) throw new Error('Not a routing file');
+    const ids = new Map(); let skipped = 0;
+    for (const d of j.destinations) { const nd = this.addDestination({ ...d, id: undefined, temp: undefined }); nd.id = uid(); ids.set(d.id, nd.id); }
+    let added = 0;
+    for (const m of j.mappings) {
+      if (!SIGNAL_BY_ID[m.signal] || !ids.has(m.destination)) { skipped++; continue; }
+      this.mappings.push({ ...m, id: uid(), destination: ids.get(m.destination) }); added++;
+    }
+    this.syncOutputs();
+    return { destinations: ids.size, mappings: added, skipped };
+  }
   loadPreset(preset) {
     const dest = this.addDestination({ ...preset.destination });
     for (const m of preset.mappings) {
@@ -70,14 +92,14 @@ export class Router {
     this._smooth.set(m.id, s); return s;
   }
 
-  _tick() {
-    const f = this.engine.features, now = performance.now();
+  _tick(now = performance.now()) {
+    const f = this.engine.features;
     if (!this.enabled || this.engine.state !== 'streaming') { for (const m of this.mappings) this.live.set(m.id, this.evaluate(m, f)); return; }
     const batch = [], wsBatch = [];
     for (const d of this.destinations) {
       if (!d.enabled) continue;
       // a schedule, not a gap: the 50 ms tick jitters (39–61 ms), and a gap test turned 20 Hz into 10 Hz
-      const period = 1000 / Math.max(1, d.rate), next = this._last.get(d.id) || 0, due = now >= next - period * 0.5;
+      const period = 1000 / Math.max(1, d.rate), next = this._last.get(d.id) || 0, due = now >= next - Math.min(period / 2, 15);
       const values = {}; let any = false;
       for (const m of this.mappings) {
         if (!m.enabled || m.destination !== d.id) continue;
@@ -91,7 +113,7 @@ export class Router {
         else batch.push({ host: d.host, port: d.port, address: m.address, args: [{ type: m.type === 'i' ? 'i' : 'f', value: v }] });
       }
       if (any) wsBatch.push({ host: d.host, port: d.port, text: JSON.stringify({ t: Date.now(), values }) });
-      if (due) this._last.set(d.id, Math.max(next + period, now - period * 0.5));
+      if (due) { let nn = next + period; if (nn <= now) nn = now + period; this._last.set(d.id, nn); }   // after a pause (or at start) restart from now
     }
     if (batch.length) { window.alma.oscSend(batch); this.sent += batch.length; }
     if (wsBatch.length && window.alma.wsSend) { window.alma.wsSend(wsBatch); this.sent += wsBatch.length; }

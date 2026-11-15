@@ -4,7 +4,7 @@ Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and 
 face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
 *Soul Charger* VR experience, but meant to send anything to anything: OSC, WebSocket, files.
 
-Status: **0.8**: a **Face** page with what the mask reads from the face: **gestures** (record each one 2–3 times; a detector per gesture with the electrodes it uses, ported from PiEEG's Face Trainer), **gaze** left / centre / right from the EOG (9-dot calibration that reads each target against the centre around it, so electrode drift does not pass for a glance), **tension** of jaw and brow (muscle above 20 Hz, 0–1 against the person). New indices: **alpha asymmetry** and **beta surge**, and the result method **Recovery**. Routing sends by **WebSocket** too (JSON). All of it tested with the simulator only. **0.7**: per-person calibration (REST then a task, Cohen's d over every channel × band, ported from PiEEG's Avatar Foundation): `cal.score` reads 0 at the person's rest and 1 at their task, and the indices read against the calibration instead of the last minute. **0.4**: sessions with participant and notes, three files per session (raw, features at 10 Hz, summary), live results (signal × method: change vs start, mean, now, peak, time above) shown large and sent as `result1–3`. Previously **0.3**: Home (3D head cut at the neck, electrode pads coloured by contact), Live (waves, bands, spectrum, indices), Routing (generic OSC: any host, port, address, type), heart rate from ANT+ straps through the USB stick (Latido Común hardware) and from Bluetooth straps, sessions. UX notes in `docs/UX.md`. Roadmap in
+Status: **0.9**: a **Sessions** page (every saved session as lines over time with its marks, results and per-signal numbers, and a second session laid over it to compare); the routing table can be exported, imported and its mappings copied; fixes from a review (a measured tension range survives reconnecting, the simulator never overwrites a real face model, WebSocket refuses web pages from other sites and retries a taken port, steady send rate from the first tick). **0.8**: a **Face** page with what the mask reads from the face: **gestures** (record each one 2–3 times; a detector per gesture with the electrodes it uses, ported from PiEEG's Face Trainer), **gaze** left / centre / right from the EOG (9-dot calibration that reads each target against the centre around it, so electrode drift does not pass for a glance), **tension** of jaw and brow (muscle above 20 Hz, 0–1 against the person). New indices: **alpha asymmetry** and **beta surge**, and the result method **Recovery**. Routing sends by **WebSocket** too (JSON). All of it tested with the simulator only. **0.7**: per-person calibration (REST then a task, Cohen's d over every channel × band, ported from PiEEG's Avatar Foundation): `cal.score` reads 0 at the person's rest and 1 at their task, and the indices read against the calibration instead of the last minute. **0.4**: sessions with participant and notes, three files per session (raw, features at 10 Hz, summary), live results (signal × method: change vs start, mean, now, peak, time above) shown large and sent as `result1–3`. Previously **0.3**: Home (3D head cut at the neck, electrode pads coloured by contact), Live (waves, bands, spectrum, indices), Routing (generic OSC: any host, port, address, type), heart rate from ANT+ straps through the USB stick (Latido Común hardware) and from Bluetooth straps, sessions. UX notes in `docs/UX.md`. Roadmap in
 `VR Unreal/docs/EEG-ALMA-CENTER-INVESTIGACION-Y-PLAN.md` (§8).
 
 ## Run
@@ -47,8 +47,15 @@ npm run dist           # Windows installer + portable exe in dist/
      last minute) and the highest level seen; *Relax, clench, brows · 15 s* measures the range instead. On above 0.6, off below 0.4.
    Gesture recordings and the gaze dots are marked in the raw file when a session runs; the summary keeps what was trained.
 
+8. **Sessions**: the saved sessions, newest first. Open one to see it whole: the signals as lines (pick them under the chart),
+   the marks in amber, the three results on top and start / end / change / mean / min / max per signal from the summary.
+   *Lay over* draws another session dashed from its own start, with its mean in the last column. Nothing on this page writes.
+
 **Routing** destinations are *OSC · UDP* (send to host:port) or *WebSocket*: the app listens on host:port (`127.0.0.1` = this
 computer, `0.0.0.0` = the network) and every client gets `{"t": ms, "values": {"/address": value, …}}` at the destination's rate.
+Native clients (TouchDesigner, Unity, Unreal, Python) connect freely; a browser page only from this computer (file://, localhost),
+so a website cannot read the stream. *Export* / *Import* save and load the table as a file (import adds, never replaces);
+*Copy* duplicates a mapping.
 
 **Heart rate:** plug the Garmin ANT+ USB stick (WinUSB driver, as for Latido Común), press *Start ANT+ stick* on Home, put a strap on: it appears with its id; give it a slot. Slot 1 is the main heart (`heart.*` signals); every slot has `strapN.bpm` / `strapN.beat`.
 
@@ -87,7 +94,7 @@ Design follows the VEATION design system (`assets/tokens.css`, Geist): grey surf
 | `src/tension.js` | jaw and brow tension from the muscle envelope (PiEEG artifact envelopes), self-setting or measured range |
 | `ws-server.js` | WebSocket server without dependencies (RFC 6455, text frames out, ping/close in) |
 | `src/tones.js` | the cue tones shared by every protocol |
-| `src/pages/*.js` | Home, Live, Face, Routing |
+| `src/pages/*.js` | Home, Live, Face, Sessions, Routing |
 | `src/app.js` | wiring, config persistence (userData/config.json) |
 
 Electrode map (PiEEG XR): Ch1–2 left temple (lower, upper) · Ch3–4 left forehead · Ch5–6 right forehead ·

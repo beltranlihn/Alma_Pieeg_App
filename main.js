@@ -3,7 +3,7 @@
 // the config file, the session files, the OSC/UDP sockets and the WebSocket listeners. BLE, DSP and drawing live in the renderer.
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const dgram = require('dgram');
@@ -91,10 +91,38 @@ ipcMain.handle('list-sessions', async () => {
   return out.sort((a, b) => b.mtime - a.mtime);
 });
 ipcMain.handle('open-sessions-folder', () => shell.openPath(sessionsDir()));
+// Sessions page: every saved session that has a summary (0.4 and later), newest first
+ipcMain.handle('sessions-index', async () => {
+  const dir = sessionsDir(), out = [];
+  for (const n of (await fs.promises.readdir(dir)).filter((x) => x.endsWith('.summary.json'))) {
+    try {
+      const s = JSON.parse(await fs.promises.readFile(path.join(dir, n), 'utf8')), base = n.slice(0, -'.summary.json'.length);
+      out.push({ base, participant: s.participant || '', notes: s.notes || '', started_at: s.started_at, duration_sec: s.duration_sec, results: s.results || [], calibrated: !!s.calibrated, face: s.face || null, marks: s.marks || [], signals: s.signals || {}, hasFeatures: fs.existsSync(path.join(dir, base + '.features.csv')) });
+    } catch (_) { /* a broken summary is skipped */ }
+  }
+  return out.sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)));
+});
+ipcMain.handle('session-features', async (_e, base) => {
+  const p = path.join(sessionsDir(), safeName(base) + '.features.csv');
+  try { return await fs.promises.readFile(p, 'utf8'); } catch (_) { return null; }
+});
+ipcMain.handle('session-reveal', (_e, base) => { shell.showItemInFolder(path.join(sessionsDir(), safeName(base) + '.summary.json')); });
 ipcMain.handle('config-load', async () => {
   try { return JSON.parse(await fs.promises.readFile(configPath(), 'utf8')); } catch (_) { return null; }
 });
 ipcMain.handle('config-save', async (_e, json) => { await fs.promises.writeFile(configPath(), json, 'utf8'); return configPath(); });
+// Routing table as a file, to share a piece's wiring
+ipcMain.handle('routing-export', async (_e, json) => {
+  const dir = path.join(app.getPath('documents'), 'EEG Alma Center'); fs.mkdirSync(dir, { recursive: true });
+  const r = await dialog.showSaveDialog(win, { title: 'Export routing', defaultPath: path.join(dir, 'routing.json'), filters: [{ name: 'Routing', extensions: ['json'] }] });
+  if (r.canceled || !r.filePath) return null;
+  await fs.promises.writeFile(r.filePath, json, 'utf8'); return r.filePath;
+});
+ipcMain.handle('routing-import', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Import routing', properties: ['openFile'], defaultPath: path.join(app.getPath('documents'), 'EEG Alma Center'), filters: [{ name: 'Routing', extensions: ['json'] }] });
+  if (r.canceled || !r.filePaths || !r.filePaths[0]) return null;
+  return { path: r.filePaths[0], text: await fs.promises.readFile(r.filePaths[0], 'utf8') };
+});
 
 // ── IPC: OSC over UDP ─────────────────────────────────────────────────────────
 function socket() {

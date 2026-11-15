@@ -13,8 +13,9 @@ const ON = 0.6, OFF = 0.4, MIN_SPAN = 3;          // the ceiling stays at least 
 const HZ = 10, FLOOR_S = 60, CEIL_TAU_S = 120;
 
 export class TensionGroup {
-  constructor(def) { this.def = def; this.reset(); }
-  reset() { this.hist = []; this.floor = 0; this.ceil = 0; this.raw = 0; this.value = 0; this.on = 0; this.fixed = null; }
+  constructor(def) { this.def = def; this.fixed = null; this.reset(); }
+  /** A new stream: forget the live history. The measured range (fixed) stays: it belongs to the person. */
+  reset() { this.hist = []; this.floor = 0; this.ceil = 0; this.raw = 0; this.value = 0; this.on = 0; }
   /** One frame (10 Hz): `emg` = per-channel µV RMS, `bad` = channels to leave out. */
   push(emg, bad) {
     let s = 0, n = 0; for (const ch of this.def.channels) if (!bad || !bad[ch]) { s += emg[ch]; n++; }

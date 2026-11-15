@@ -1,10 +1,11 @@
-// EEG Alma Center — renderer entry: the engine, the router, the config and the four pages.
+// EEG Alma Center — renderer entry: the engine, the router, the config and the five pages.
 import { Engine } from './engine.js';
 import { Router } from './router.js';
 import { mountHome } from './pages/home.js';
 import { mountLive } from './pages/live.js';
 import { mountRouting } from './pages/routing.js';
 import { mountFace } from './pages/face.js';
+import { mountSessions } from './pages/sessions.js';
 import { GESTURES } from './face.js';
 import { mountCalibration } from './calview.js';
 
@@ -17,12 +18,18 @@ const ui = { page: 'home', liveView: 'bands', display: null };
 let saveTimer = null;
 function saveConfig() {
   clearTimeout(saveTimer); router.syncOutputs();
-  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON(), straps: engine.strapSlots, face: (window.alma.flags || {}).sim ? (cfg && cfg.face) || null : engine.faceModelJSON() }, null, 2)), 300);
+  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON(), straps: engine.strapSlots, face: savedFace() }, null, 2)), 300);
+}
+// The simulator never writes the face model: with --sim the one in the file stays as it is; with the Home
+// Simulator button the engine keeps the person's model aside (savedFaceModel) and gives it back on reconnect.
+function savedFace() {
+  if ((window.alma.flags || {}).sim) return (cfg && cfg.face) || null;
+  return engine.savedFaceModel ?? (cfg && cfg.face) ?? null;
 }
 const cfg = await window.alma.loadConfig();
 if (cfg) { Object.assign(ui, cfg.ui || {}); if (cfg.filters) Object.assign(engine.filters, cfg.filters); router.fromJSON(cfg.router); if (cfg.straps) engine.strapSlots = { ...cfg.straps }; if (cfg.face && !(window.alma.flags || {}).sim) engine.loadFaceModel(cfg.face); }
 engine.addEventListener('ant', saveConfig);
-engine.addEventListener('face-model', () => { if (!(window.alma.flags || {}).sim) saveConfig(); });   // a simulator model never replaces a real one
+engine.addEventListener('face-model', () => { if (!(window.alma.flags || {}).sim && engine.sourceKind !== 'sim') saveConfig(); });   // a simulator model never replaces a real one
 
 // ── Pages ──
 { const v = (window.alma.flags || {}).view; if (v) { if (['gestures', 'gaze', 'tension'].includes(v)) ui.faceView = v; else ui.liveView = v; } }
@@ -30,12 +37,13 @@ const pages = {
   home: mountHome($('pageHome'), { engine, ui }),
   live: mountLive($('pageLive'), { engine, ui, saveConfig }),
   face: mountFace($('pageFace'), { engine, ui, saveConfig }),
+  sessions: mountSessions($('pageSessions'), { ui, saveConfig }),
   routing: mountRouting($('pageRouting'), { engine, router, saveConfig }),
 };
 mountCalibration({ engine, ui, saveConfig, panel: $('calPanel') });
 function show(page) {
   ui.page = page; saveConfig();
-  for (const p of ['home', 'live', 'face', 'routing']) $('page' + p[0].toUpperCase() + p.slice(1)).classList.toggle('hidden', p !== page);
+  for (const p of ['home', 'live', 'face', 'sessions', 'routing']) $('page' + p[0].toUpperCase() + p.slice(1)).classList.toggle('hidden', p !== page);
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.page === page));
   pages[page].onShow?.();
 }
@@ -55,6 +63,7 @@ for (const ev of ['state', 'quality', 'recording', 'disconnected']) engine.addEv
 refreshHeader();
 
 const flags = window.alma.flags || {};
+if (flags.probe) window.almaEngine = engine;                    // the self-test probe reads the engine
 show(flags.page || ui.page || 'home');
 if (flags.sim && flags.session) setTimeout(() => { engine.startSession('test-person', 'self-test'); setTimeout(() => engine.endSession(), +flags.session * 1000); }, 2500);
 if (flags.sim) {

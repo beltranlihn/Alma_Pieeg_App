@@ -13,6 +13,8 @@ export function mountRouting(root, { engine, router, saveConfig }) {
         <div class="routing-tools">
           <div class="row"><div class="k">Sending</div><div class="seg-group" id="routerEnabled"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
           <div class="row"><div class="k">Messages sent</div><div class="v" id="oscSent">0</div></div>
+          <div class="row"><div class="k">Routing file</div><div class="v"><button class="seg" id="rtExport">Export</button> <button class="seg" id="rtImport">Import</button></div></div>
+          <div class="hint" id="rtNote"></div>
         </div>
       </div>
 
@@ -77,7 +79,7 @@ export function mountRouting(root, { engine, router, saveConfig }) {
         <div><input type="text" value="${m.outMin}"></div><div><input type="text" value="${m.outMax}"></div>
         <div><input type="text" value="${m.smooth}"></div>
         <div class="live"><div class="meter"><div class="meter-fill"></div></div><span class="v"></span></div>
-        <div class="actions"><button class="seg danger">Remove</button></div>`;
+        <div class="actions"><button class="seg copy" title="Duplicate this mapping">Copy</button><button class="seg danger">Remove</button></div>`;
       const on = r.querySelector('input[type=checkbox]'), sig = r.querySelector('.sig'), addr = r.querySelector('.addr'), dest = r.querySelector('.dest'), type = r.querySelector('.type');
       const [inMin, inMax, outMin, outMax, smooth] = Array.from(r.querySelectorAll('input[type=text]')).slice(1);
       sig.value = m.signal; dest.value = m.destination || ''; type.value = m.type;
@@ -92,6 +94,7 @@ export function mountRouting(root, { engine, router, saveConfig }) {
       outMax.addEventListener('change', () => { m.outMax = num(outMax.value, m.outMax); saveConfig(); });
       smooth.addEventListener('change', () => { m.smooth = Math.max(0, Math.min(0.95, num(smooth.value, m.smooth))); smooth.value = m.smooth; saveConfig(); });
       r.querySelector('button.danger').addEventListener('click', () => { router.removeMapping(m.id); saveConfig(); renderMaps(); renderDests(); });
+      r.querySelector('button.copy').addEventListener('click', () => { router.duplicateMapping(m.id); saveConfig(); renderMaps(); renderDests(); });
       liveEls.set(m.id, { fill: r.querySelector('.meter-fill'), v: r.querySelector('.live .v'), m });
       el.appendChild(r);
     }
@@ -107,6 +110,13 @@ export function mountRouting(root, { engine, router, saveConfig }) {
     $('oscSent').textContent = String(router.sent);
   }
 
+  const note = (t) => { $('rtNote').textContent = t; clearTimeout(note.t); note.t = setTimeout(() => { $('rtNote').textContent = ''; }, 6000); };
+  $('rtExport').addEventListener('click', async () => { const p = await window.alma.exportRouting(router.exportJSON()); if (p) note(`Saved ${p.split(/[\x5c/]/).pop()}.`); });
+  $('rtImport').addEventListener('click', async () => {
+    const f = await window.alma.importRouting(); if (!f) return;
+    try { const r = router.importJSON(f.text); saveConfig(); renderDests(); renderMaps(); note(`Added ${r.destinations} destination${r.destinations === 1 ? '' : 's'} and ${r.mappings} mapping${r.mappings === 1 ? '' : 's'}${r.skipped ? ` · ${r.skipped} skipped (unknown signal)` : ''}.`); }
+    catch (e) { note(`Could not read ${f.path.split(/[\x5c/]/).pop()}: ${e.message}`); }
+  });
   $('addDest').addEventListener('click', () => { router.addDestination(); saveConfig(); renderDests(); renderMaps(); });
   $('addMap').addEventListener('click', () => { if (!router.destinations.length) router.addDestination(); router.addMapping(); saveConfig(); renderDests(); renderMaps(); });
   $('routerEnabled').querySelectorAll('button').forEach((b) => { b.classList.toggle('on', (b.dataset.v === '1') === router.enabled); b.addEventListener('click', () => { router.enabled = b.dataset.v === '1'; $('routerEnabled').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); saveConfig(); }); });

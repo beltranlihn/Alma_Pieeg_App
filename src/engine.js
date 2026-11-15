@@ -122,6 +122,10 @@ export class Engine extends EventTarget {
     this.rings.reset(); this.clock.reset(); this.blink.reset(); for (const n of Object.values(this.norms)) n.reset();
     for (const c of this.chains) c.configure(this.filters);
     for (const c of this.wideChains) c.configure(this.filters.notch); for (const e of this.emgEnv) e.reset(); for (const e of this.eogChains) e.reset();
+    // The simulator gets a clean face model; the person's real one is kept aside and comes back with the PiEEG.
+    if (kind === 'sim' && this.sourceKind !== 'sim') { this._realFace = this.faceModelJSON(); this._clearFaceModels(); }
+    else if (kind !== 'sim' && this.sourceKind === 'sim' && this._realFace) { this._clearFaceModels(); this.loadFaceModel(this._realFace); this._realFace = null; }
+    this.sourceKind = kind; this.gestures.resetLive();
     this.tension.reset(); this.faaNorm.reset(); this._faa = { l: 0, r: 0, n: 0 }; this._beta = { ema: 0, base: 0, n: 0 }; this.faceReady = false;
     this.features = this._emptyFeatures(); this.quality = null;
     this._setState('connecting', kind === 'ble' ? 'Scanning for PiEEG…' : 'Starting simulator…');
@@ -349,6 +353,9 @@ export class Engine extends EventTarget {
     if (this.gaze.calibrating) { this.gaze.cancel(); this._emit('gaze', { type: 'cancelled' }); }
     if (this.tension.measuring) { this.tension.cancelRange(); this._emit('tension', { type: 'cancelled' }); }
   }
+  _clearFaceModels() { this.gestures.cancel(); this.gestures.clearAll(); this.gaze.reset(); this.tension.clearRange(); }
+  /** The face model that belongs to a person (never the simulator's). */
+  get savedFaceModel() { return this.sourceKind === 'sim' ? this._realFace : this.faceModelJSON(); }
   faceModelJSON() { return { gestures: this.gestures.toJSON(), gaze: this.gaze.toJSON(), tension: this.tension.toJSON() }; }
   loadFaceModel(j) { if (!j) return; this.gestures.fromJSON(j.gestures); this.gaze.fromJSON(j.gaze); this.tension.fromJSON(j.tension); }
 

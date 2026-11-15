@@ -124,7 +124,7 @@ main { min-height: 0; }
 .routing h2 { padding-left: 24px; padding-right: 24px; }
 .table { margin: 0 24px; }
 .trow { display: grid; grid-template-columns: 36px 1.2fr 120px 1.2fr 90px 90px 140px 150px; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line-soft); }
-.table.maps .trow { grid-template-columns: 36px 2fr 1.4fr 1fr 80px 70px 70px 70px 70px 70px 1.2fr 80px; }
+.table.maps .trow { grid-template-columns: 36px 2fr 1.4fr 1fr 80px 70px 70px 70px 70px 70px 1.2fr 120px; }
 .trow.thead { color: var(--ink-3); border-top: 0; padding-bottom: 2px; }
 .trow.empty-row, .table.maps .trow.empty-row { grid-template-columns: 1fr; color: var(--ink-3); }
 .trow .dim { color: var(--ink-3); }
@@ -235,3 +235,22 @@ body.calibrating .sb-cue { display: flex; }
 .gaze-overlay .go-cue { position: absolute; left: 0; right: 0; top: 18%; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-2); font-size: var(--fs-2); }
 .gaze-overlay .go-cue b { color: var(--ink); font-size: var(--fs-3); font-weight: 600; }
 .gaze-overlay #goCancel { position: absolute; right: 20px; bottom: 20px; cursor: pointer; }
+
+/* ── Sessions (0.9): the whole session as lines, the numbers under it ── */
+.ss-view { min-height: 240px; }
+.ss-bottom { border-top: 1px solid var(--line); max-height: 42%; overflow-y: auto; padding: 10px 24px 20px; }
+.ss-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.ss-chips .chip { height: 24px; gap: 0; }
+.ss-chips .chip .swatch { margin-right: 6px; }
+.ss-chips .chip span { color: var(--ink-3); margin-left: 8px; }
+.ss-chips .chip:hover span { color: var(--danger); }
+.ss-chips .ss-add { width: 200px; height: 24px; }
+.ss-row { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(6, minmax(60px, 1fr)) minmax(90px, 1fr); gap: 12px; align-items: center; min-height: 28px; border-top: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; color: var(--ink); }
+.ss-row > div:not(:first-child) { text-align: right; }
+.ss-row.ss-thead { color: var(--ink-3); border-top: 0; min-height: 24px; }
+.ss-row > div:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+.ss-row .swatch { margin-right: 8px; }
+.live-side .row.sel .k, .live-side .row.sel .v { color: var(--ink); }
+.live-side .row.sel { box-shadow: inset 2px 0 0 var(--ink); padding-left: 8px; }
+.live-side .k .dim { color: var(--ink-3); }
+.sessions .results .result-time { flex: 1.4; }

@@ -75,7 +75,9 @@ export function fitGaze(holds) {
   // Separation: how far apart left/right (up/down) are, in units of the within-hold noise.
   const sepH = Math.abs(per.r.dh - per.l.dh) / (Math.sqrt((per.r.sdh ** 2 + per.l.sdh ** 2) / 2) || 1);
   const sepV = Math.abs(per.d.dv - per.u.dv) / (Math.sqrt((per.d.sdv ** 2 + per.u.sdv ** 2) / 2) || 1);
-  const centre = holds[centres[centres.length - 1]];
+  const centreHold = [...centres].reverse().map((k) => holds[k]).find((hd) => hd.h.length >= 3);
+  if (!centreHold) return null;
+  const centre = centreHold;
   return { ax, ay, sepH, sepV, quality: { h: sepQuality(sepH), v: sepQuality(sepV) }, per, centre: { h: mean(centre.h), v: mean(centre.v) }, at: Date.now() };
 }
 
@@ -96,6 +98,14 @@ export class Gaze {
   update(now, eog, { blinking = false, bad = null, dt = 0.05 } = {}) {
     const { h, v } = eogFeatures(eog, bad);
     if (!Number.isFinite(h) || !Number.isFinite(v)) return null;
+    // When an electrode drops out of (or back into) the averages, h and v jump by its offset. Move the centre by the
+    // same jump, measured on this very sample, so it does not read as a glance.
+    const key = bad ? bad.map((b) => (b ? 1 : 0)).join('') : '';
+    if (this._badKey !== undefined && key !== this._badKey && this.model) {
+      const before = eogFeatures(eog, this._bad);
+      if (Number.isFinite(before.h) && Number.isFinite(before.v)) { this.centre.h += h - before.h; this.centre.v += v - before.v; }
+    }
+    this._badKey = key; this._bad = bad ? [...bad] : null;
     this.h = h; this.v = v;
     let changed = null;
     if (this.rec) {

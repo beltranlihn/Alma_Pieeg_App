@@ -187,6 +187,13 @@ export function phaseAt(t, cycles) {
   return { phase: 'done', amp: 0, pos: false, neg: false, cycle: cycles - 1, cycleLabel: 0 };
 }
 
+/** A saved detector, checked: every vector the right length and finite, or null (a broken file never reaches predict). */
+export function validModel(d) {
+  const vec = (a, n) => Array.isArray(a) && a.length === n && a.every(Number.isFinite);
+  if (!d || !vec(d.w, FEATURE_DIM) || !vec(d.mean, FEATURE_DIM) || !vec(d.std, FEATURE_DIM) || !Number.isFinite(d.b)) return null;
+  return { ...d, std: d.std.map((v) => v || 1), cv: Number.isFinite(d.cv) ? d.cv : 0, importance: vec(d.importance, CHANNELS) ? d.importance : new Array(CHANNELS).fill(0), cycles: d.cycles | 0, recordings: d.recordings | 0 };
+}
+
 // ── the trainer: recordings, detectors, live probabilities ─────────────────
 const ON = 0.7, OFF = 0.4, EMA = 0.25;
 
@@ -244,12 +251,15 @@ export class GestureTrainer {
 
   clear(id) { delete this.models[id]; delete this.units[id]; delete this.recordings[id]; this.prob[id] = 0; this.on[id] = 0; }
   clearAll() { for (const g of GESTURES) this.clear(g.id); }
+  /** A new stream: live probabilities and on/off start from zero (models and recordings stay). */
+  resetLive() { for (const g of GESTURES) { this.prob[g.id] = 0; this.on[g.id] = 0; } }
 
   /** Live: smoothed probability and on/off per trained gesture from one feature vector (call at 10–20 Hz). */
   predict(x) {
     for (const g of GESTURES) {
       const d = this.models[g.id];
-      if (!d || !x) { this.prob[g.id] += (0 - this.prob[g.id]) * EMA; if (!d) { this.prob[g.id] = 0; this.on[g.id] = 0; } continue; }
+      if (!d) { this.prob[g.id] = 0; this.on[g.id] = 0; continue; }
+      if (!x) { this.prob[g.id] += (0 - this.prob[g.id]) * EMA; if (this.on[g.id] && this.prob[g.id] < OFF) this.on[g.id] = 0; continue; }
       const p = predictProb(d, x);
       this.prob[g.id] += (p - this.prob[g.id]) * EMA;
       if (!this.on[g.id] && this.prob[g.id] > ON) this.on[g.id] = 1;
@@ -265,7 +275,7 @@ export class GestureTrainer {
   fromJSON(j) {
     if (!j || !j.models) return;
     this.participant = j.participant || '';
-    for (const [id, d] of Object.entries(j.models)) if (GESTURE_BY_ID[id] && d.w && d.w.length === FEATURE_DIM) this.models[id] = { ...d };
+    for (const [id, d] of Object.entries(j.models)) { const m = validModel(d); if (GESTURE_BY_ID[id] && m) this.models[id] = m; }
   }
   /** What goes into the session summary. */
   summary() {

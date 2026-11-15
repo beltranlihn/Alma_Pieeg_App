@@ -49,7 +49,7 @@ changing its look. VEATION does this with one trick: **the same grey language, l
 
 **Live**
 - Marks list with timestamps under Recording, click to jump in replay.
-- Replay of a saved session (scrub bar) in the same views, so sessions can be reviewed without PiEEG Studio.
+- **partly done (0.9)** · the Sessions page shows a saved session whole (features over time, marks, results, a second one laid over). Still to do: scrubbing the raw file through the Waves / Bands views.
 - Bands view: choose which lanes to show and their order; drag to reorder.
 - Spectrum: hover gives the frequency and power at the cursor.
 - A compact "meters" strip at the bottom of every view: the seven indices and the heart as thin bars, always visible.
@@ -57,7 +57,7 @@ changing its look. VEATION does this with one trick: **the same grey language, l
 **Routing**
 - A "learn" column: the receiver's last value echo is not possible over UDP, so instead show *sent N messages to host:port in the last 10 s* per destination, and a red dot when the OS reports the host unreachable.
 - Duplicate a mapping; drag to reorder; filter by destination.
-- Import/export of the routing table as JSON (to share a piece's wiring).
+- **done (0.9)** · Import/export of the routing table as JSON (to share a piece's wiring); duplicate a mapping (*Copy*).
 
 **App**
 - Keyboard: `1 2 3` switch pages, `space` pause the scope, `R` record, `M` mark.

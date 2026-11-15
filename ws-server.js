@@ -39,6 +39,13 @@ function decodeFrames(buf) {
   return { frames, rest: buf.subarray(off) };
 }
 
+/** Native clients (TouchDesigner, Unity, Unreal, Python) send no Origin. A browser page does: only pages from
+ *  this computer (file://, localhost) may connect, so a website open in a browser cannot read someone's signals. */
+function originAllowed(origin) {
+  if (!origin || origin === 'null') return true;
+  try { const u = new URL(origin); return u.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname); } catch (_) { return false; }
+}
+
 class Hub {
   constructor() { this.servers = new Map(); }   // "host:port" → { server, clients:Set, error, host, port }
   key(host, port) { return `${host || '0.0.0.0'}:${port}`; }
@@ -47,7 +54,11 @@ class Hub {
   sync(list) {
     const want = new Set(list.map((d) => this.key(d.host, d.port)));
     for (const [k, s] of this.servers) if (!want.has(k)) this._close(k, s);
-    for (const d of list) { const k = this.key(d.host, d.port); if (!this.servers.has(k)) this._open(k, d.host || '0.0.0.0', d.port); }
+    for (const d of list) {
+      const k = this.key(d.host, d.port), s = this.servers.get(k);
+      if (s && s.error) this._close(k, s);                      // a port that was taken: try again
+      if (!this.servers.has(k)) this._open(k, d.host || '0.0.0.0', d.port);
+    }
   }
 
   _open(k, host, port) {
@@ -56,6 +67,7 @@ class Hub {
     server.on('upgrade', (req, socket) => {
       const key = req.headers['sec-websocket-key'];
       if (!key || String(req.headers.upgrade || '').toLowerCase() !== 'websocket') { socket.destroy(); return; }
+      if (!originAllowed(req.headers.origin)) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
       socket.write(['HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade', `Sec-WebSocket-Accept: ${acceptKey(key)}`, '', ''].join('\r\n'));
       socket.setNoDelay(true);
       entry.clients.add(socket);
@@ -92,4 +104,4 @@ class Hub {
   closeAll() { for (const [k, s] of this.servers) this._close(k, s); }
 }
 
-module.exports = { Hub, encodeFrame, decodeFrames, acceptKey };
+module.exports = { Hub, encodeFrame, decodeFrames, acceptKey, originAllowed };

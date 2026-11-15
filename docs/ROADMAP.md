@@ -48,8 +48,10 @@ Left out on purpose: P300 and SSVEP (need repeated stimuli), webhooks, the LLM a
 
 ## Later: the app itself
 
-From `docs/UX.md` §4: big status line on Home, electrode ↔ row hover, replay of saved sessions, a Sessions page,
-marks list, keyboard shortcuts, app icon and installer, import/export of the routing table.
+From `docs/UX.md` §4: big status line on Home, electrode ↔ row hover, scrubbing a saved raw file through the views,
+marks list, keyboard shortcuts, app icon and installer. Done in 0.9: a Sessions page (whole-session lines, marks, results,
+comparison) and import/export of the routing table. The packaged build now includes `osc-encode.js`, `ant.js` and
+`ws-server.js` (0.7 and earlier would not have started once installed).
 
 ## Giving it back to PiEEG
 
