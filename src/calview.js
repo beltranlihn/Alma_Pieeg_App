@@ -6,6 +6,7 @@ import { BANDS } from './fft.js';
 import { INDICES } from './indices.js';
 import { XR_FACE } from './scope.js';
 import { BAND_COLOR } from './colors.js';
+import { tone } from './tones.js';
 
 const BAND_SYMBOL = Object.fromEntries(BANDS.map((b) => [b.id, b.label.split(' ')[0]]));
 const INDEX_LABEL = Object.fromEntries(INDICES.map((i) => [i.id, i.label]));
@@ -16,18 +17,6 @@ export function mountCalibration({ engine, ui, saveConfig, panel }) {
   const $ = (id) => document.getElementById(id);
   const cal = engine.calib;
   Object.assign(cal.settings, ui.calib || {});
-
-  // ── tones (a gesture opens the audio context: the Calibrate click) ──
-  let ctx = null;
-  function tone(freq, ms = 140, delay = 0) {
-    try {
-      ctx = ctx || new AudioContext();
-      const t = ctx.currentTime + delay, o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(ctx.destination);
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.18, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
-      o.start(t); o.stop(t + ms / 1000 + 0.02);
-    } catch { /* no audio device: the cue line still shows the phase */ }
-  }
 
   // ── panel ──
   panel.innerHTML = `

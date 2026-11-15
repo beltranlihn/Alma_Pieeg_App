@@ -8,7 +8,7 @@ export function mountRouting(root, { engine, router, saveConfig }) {
       <div class="routing-head">
         <div class="routing-title">
           <h1>Routing</h1>
-          <div class="hint">Standard OSC over UDP. Add a destination (any host and port), then map signals to addresses.</div>
+          <div class="hint">OSC over UDP, or a WebSocket that receivers connect to (one JSON message per tick). Add a destination, then map signals to addresses.</div>
         </div>
         <div class="routing-tools">
           <div class="row"><div class="k">Sending</div><div class="seg-group" id="routerEnabled"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
@@ -18,12 +18,12 @@ export function mountRouting(root, { engine, router, saveConfig }) {
 
       <h2>Destinations <button class="seg" id="addDest">+ Add</button></h2>
       <div class="table" id="dests">
-        <div class="trow thead"><div>On</div><div>Name</div><div>Host (IP)</div><div>Port</div><div>Rate (Hz)</div><div>Mappings</div><div></div></div>
+        <div class="trow thead"><div>On</div><div>Name</div><div>Type</div><div>Host (IP)</div><div>Port</div><div>Rate (Hz)</div><div>Mappings</div><div></div></div>
       </div>
 
       <h2>Mappings <button class="seg" id="addMap">+ Add</button></h2>
       <div class="table maps" id="maps">
-        <div class="trow thead"><div>On</div><div>Signal</div><div>OSC address</div><div>Destination</div><div>Type</div><div>In min</div><div>In max</div><div>Out min</div><div>Out max</div><div>Smooth</div><div>Live</div><div></div></div>
+        <div class="trow thead"><div>On</div><div>Signal</div><div>Address</div><div>Destination</div><div>Type</div><div>In min</div><div>In max</div><div>Out min</div><div>Out max</div><div>Smooth</div><div>Live</div><div></div></div>
       </div>
       <div class="hint">In → Out: the signal range that maps to the output range. Smooth 0 = instant, 0.9 = slow. Int sends whole numbers.</div>
     </section>`;
@@ -42,16 +42,19 @@ export function mountRouting(root, { engine, router, saveConfig }) {
       const r = document.createElement('div'); r.className = 'trow';
       r.innerHTML = `<div><input type="checkbox" ${d.enabled ? 'checked' : ''}></div>
         <div><input type="text" value="${esc(d.name)}"></div>
-        <div><input type="text" value="${esc(d.host)}" spellcheck="false"></div>
+        <div><select class="kind"><option value="osc">OSC · UDP</option><option value="ws">WebSocket</option></select></div>
+        <div><input type="text" value="${esc(d.host)}" spellcheck="false" title="${d.kind === 'ws' ? 'Listen on: 127.0.0.1 = this computer only · 0.0.0.0 = the network' : 'Where to send'}"></div>
         <div><input type="text" value="${d.port}"></div>
         <div><input type="text" value="${d.rate}"></div>
-        <div class="dim">${router.mappings.filter((m) => m.destination === d.id).length}</div>
+        <div class="dim" data-dest="${d.id}">${router.mappings.filter((m) => m.destination === d.id).length}</div>
         <div class="actions"><button class="seg" title="Send /alma/test 1.0">Test</button><button class="seg danger">Remove</button></div>`;
       const [on, name, host, port, rate] = r.querySelectorAll('input');
-      on.addEventListener('change', () => { d.enabled = on.checked; saveConfig(); });
+      const kind = r.querySelector('.kind'); kind.value = d.kind || 'osc';
+      kind.addEventListener('change', () => { d.kind = kind.value; if (d.kind === 'ws' && d.port === 9000) d.port = 8765; router.syncOutputs(); saveConfig(); renderDests(); });
+      on.addEventListener('change', () => { d.enabled = on.checked; router.syncOutputs(); saveConfig(); });
       name.addEventListener('change', () => { d.name = name.value.trim() || 'Destination'; saveConfig(); renderMaps(); });
-      host.addEventListener('change', () => { d.host = host.value.trim(); saveConfig(); });
-      port.addEventListener('change', () => { d.port = Math.max(1, Math.min(65535, num(port.value, d.port) | 0)); port.value = d.port; saveConfig(); });
+      host.addEventListener('change', () => { d.host = host.value.trim(); router.syncOutputs(); saveConfig(); });
+      port.addEventListener('change', () => { d.port = Math.max(1, Math.min(65535, num(port.value, d.port) | 0)); port.value = d.port; router.syncOutputs(); saveConfig(); });
       rate.addEventListener('change', () => { d.rate = Math.max(1, Math.min(250, num(rate.value, d.rate))); rate.value = d.rate; saveConfig(); });
       const [test, remove] = r.querySelectorAll('button');
       test.addEventListener('click', () => { router.test(d); test.textContent = 'Sent'; setTimeout(() => (test.textContent = 'Test'), 900); });
@@ -108,6 +111,18 @@ export function mountRouting(root, { engine, router, saveConfig }) {
   $('addMap').addEventListener('click', () => { if (!router.destinations.length) router.addDestination(); router.addMapping(); saveConfig(); renderDests(); renderMaps(); });
   $('routerEnabled').querySelectorAll('button').forEach((b) => { b.classList.toggle('on', (b.dataset.v === '1') === router.enabled); b.addEventListener('click', () => { router.enabled = b.dataset.v === '1'; $('routerEnabled').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); saveConfig(); }); });
   setInterval(() => { if (!root.classList.contains('hidden')) refreshLive(); }, 100);
+  // WebSocket destinations: how many clients are connected, or why the port could not open
+  setInterval(async () => {
+    if (root.classList.contains('hidden') || !window.alma.wsStats) return;
+    const stats = await window.alma.wsStats();
+    for (const d of router.destinations) {
+      const cell = root.querySelector(`[data-dest="${d.id}"]`); if (!cell) continue;
+      const n = router.mappings.filter((m) => m.destination === d.id).length;
+      if (d.kind !== 'ws') { cell.textContent = String(n); continue; }
+      const s = stats.find((x) => x.port === d.port && x.host === (d.host || '0.0.0.0'));
+      cell.textContent = !d.enabled ? `${n}` : !s ? `${n} · opening` : s.error ? `${n} · ${s.error}` : `${n} · ${s.clients} ${s.clients === 1 ? 'client' : 'clients'}`;
+    }
+  }, 1000);
   renderDests(); renderMaps();
   return { onShow: () => { renderDests(); renderMaps(); } };
 }

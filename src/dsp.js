@@ -78,3 +78,50 @@ export function goertzelPower(buf, start, len, freq, fs) {
   for (let i = 0; i < len; i++) { s0 = buf[(start + i) % n] + c * s1 - s2; s2 = s1; s1 = s0; }
   return (s1 * s1 + s2 * s2 - c * s1 * s2) / (len * len / 4);   // ≈ amplitude² of that tone
 }
+
+// ── Side chains for the face (0.8) ──────────────────────────────────────────
+// The display chain (1–40 Hz) is right for EEG bands but hides what the face does: muscle lives above
+// 20 Hz and the eyes below 1 Hz. Every sample also runs through these, whatever the display filters say.
+
+/** Wide band for facial gestures (PiEEG Face Trainer features): DC out, high-pass 1 Hz, mains and its
+ *  first harmonic notched, nothing cut on top (up to Nyquist, 125 Hz). */
+export class WideChain {
+  constructor(fs, mains = 50) { this.fs = fs; this.configure(mains); }
+  configure(mains = 50) {
+    this.dc = undefined;
+    this.hp = BUTTER4_Q.map((q) => Biquad.highpass(1, this.fs, q));
+    this.notches = [];
+    if (mains) for (let f = mains; f < this.fs / 2 - 1; f += mains) this.notches.push(Biquad.notch(f, this.fs, 30));
+  }
+  process(x) {
+    if (this.dc === undefined) this.dc = x; else this.dc += (x - this.dc) * 0.0005;
+    let y = x - this.dc;
+    for (const b of this.hp) y = b.process(y);
+    for (const b of this.notches) y = b.process(y);
+    return y;
+  }
+}
+
+/** Muscle envelope: high-pass 20 Hz (the EMG band, no blinks or eye movements) → squared → 100 ms
+ *  exponential average → √. Microvolts RMS of the muscle activity under the electrode. */
+export class EmgEnvelope {
+  constructor(fs, tauMs = 100) { this.fs = fs; this.hp = BUTTER4_Q.map((q) => Biquad.highpass(20, fs, q)); this.k = 1 - Math.exp(-1000 / (tauMs * fs)); this.ms = 0; }
+  reset() { this.ms = 0; for (const b of this.hp) b.reset(); }
+  process(wide) { let y = wide; for (const b of this.hp) y = b.process(y); this.ms += (y * y - this.ms) * this.k; return Math.sqrt(this.ms); }
+  get value() { return Math.sqrt(this.ms); }
+}
+
+/** Slow band for gaze from EOG: the eyes' dipole moves the potential for as long as the eyes stay
+ *  turned, so no 1 Hz high-pass here. DC follows at τ = 2 min (just to keep the numbers small),
+ *  low-pass 8 Hz (4th order). The gaze model keeps its own centre on top of this. */
+export class EogChain {
+  constructor(fs) { this.fs = fs; this.k = 1 / (fs * 120); this.lp = BUTTER4_Q.map((q) => Biquad.lowpass(8, fs, q)); this.dc = undefined; this.value = 0; }
+  reset() { this.dc = undefined; this.value = 0; for (const b of this.lp) b.reset(); }
+  process(x) {
+    if (this.dc === undefined) { this.dc = x; }
+    else this.dc += (x - this.dc) * this.k;
+    let y = x - this.dc;
+    for (const b of this.lp) y = b.process(y);
+    this.value = y; return y;
+  }
+}

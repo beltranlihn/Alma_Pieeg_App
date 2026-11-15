@@ -6,9 +6,10 @@ export class Rings {
     this.fs = fs; this.size = fs * seconds; this.write = 0; this.count = 0; this.total = 0;
     this.raw = Array.from({ length: CHANNELS }, () => new Float32Array(this.size));
     this.filt = Array.from({ length: CHANNELS }, () => new Float32Array(this.size));
+    this.wide = Array.from({ length: CHANNELS }, () => new Float32Array(this.size));   // 1 Hz–Nyquist, for the face
   }
-  push(raw, filt) {
-    for (let ch = 0; ch < CHANNELS; ch++) { this.raw[ch][this.write] = raw[ch]; this.filt[ch][this.write] = filt[ch]; }
+  push(raw, filt, wide) {
+    for (let ch = 0; ch < CHANNELS; ch++) { this.raw[ch][this.write] = raw[ch]; this.filt[ch][this.write] = filt[ch]; if (wide) this.wide[ch][this.write] = wide[ch]; }
     this.write = (this.write + 1) % this.size; if (this.count < this.size) this.count++; this.total++;
   }
   /** Index of the sample `back` samples before the newest one. */

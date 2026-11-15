@@ -123,7 +123,7 @@ main { min-height: 0; }
 .routing-tools select { width: 220px; }
 .routing h2 { padding-left: 24px; padding-right: 24px; }
 .table { margin: 0 24px; }
-.trow { display: grid; grid-template-columns: 36px 1.2fr 1.2fr 90px 90px 90px 150px; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line-soft); }
+.trow { display: grid; grid-template-columns: 36px 1.2fr 120px 1.2fr 90px 90px 140px 150px; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line-soft); }
 .table.maps .trow { grid-template-columns: 36px 2fr 1.4fr 1fr 80px 70px 70px 70px 70px 70px 1.2fr 80px; }
 .trow.thead { color: var(--ink-3); border-top: 0; padding-bottom: 2px; }
 .trow.empty-row, .table.maps .trow.empty-row { grid-template-columns: 1fr; color: var(--ink-3); }
@@ -193,3 +193,45 @@ body.calibrating .sb-cue { display: flex; }
 #btnCal.running { background: linear-gradient(90deg, var(--state-on) var(--p, 0%), var(--s2) var(--p, 0%)); color: var(--ink); }
 .live-side .row input[type=checkbox] { flex: none; }
 .live-side .row:not(.clickable) input[type=checkbox] { opacity: 0.3; }
+
+/* ── Face (0.8): gestures as rows, gaze pad, tension lanes ── */
+.face-cue { position: relative; display: flex; align-items: baseline; gap: 16px; padding: 14px 24px 18px; background: var(--s1); border-bottom: 1px solid var(--line); }
+.face-cue .fc-phase { font-size: var(--fs-hero); line-height: 32px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink-2); min-width: 180px; }
+.face-cue.go .fc-phase { color: var(--ink); }
+.face-cue .fc-text { flex: 1; min-width: 0; color: var(--ink-2); font-size: var(--fs-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.face-cue .fc-steps { display: flex; gap: 6px; }
+.face-cue .fc-steps i { font-style: normal; font-weight: 600; font-size: var(--fs-2); width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-3); color: var(--ink-dim); background: var(--s2); font-variant-numeric: tabular-nums; }
+.face-cue .fc-steps i.on { color: var(--s0); background: var(--ink); }
+.face-cue .fc-steps i.done { color: var(--ink-3); background: var(--s0); }
+.face-cue .fc-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--s0); }
+.face-cue .fc-bar i { display: block; height: 100%; width: 0; background: var(--ink-2); }
+.face-cue.go .fc-bar i { background: var(--ink); }
+
+.gesture-list { height: 100%; overflow-y: auto; padding: 4px 24px 24px; }
+.g-row { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(170px, 1fr) 132px minmax(120px, 0.8fr) 150px; gap: 20px; align-items: center; min-height: 52px; padding: 6px 0; border-top: 1px solid var(--line-soft); }
+.g-row.g-head { min-height: 32px; color: var(--ink-3); border-top: 0; }
+.g-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.g-name b { font-size: var(--fs-2); font-weight: 600; color: var(--ink); }
+.g-name span { color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-ready { display: flex; flex-direction: column; gap: 6px; }
+.g-score { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.g-score b { color: var(--ink); font-weight: 600; }
+.g-elec { display: flex; gap: 6px; }
+.g-elec span { display: flex; gap: 2px; }
+.g-elec i { display: block; width: 12px; height: 16px; border-radius: 1px; background: var(--ink-3); opacity: 0.12; transition: opacity 200ms; }
+.g-live { display: flex; align-items: center; gap: 10px; }
+.g-live .meter { flex: 1; }
+.g-live .meter-fill { transition: width 60ms linear; }
+.g-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.g-row.recording .g-name b { color: var(--ink); }
+.g-row.recording .g-rec { background: var(--ink); color: var(--s0); }
+.g-row.on .g-name b { color: var(--c-face, #e8c84b); }
+.g-row:not(.trained) .g-live { opacity: 0.35; }
+
+.gaze-overlay { position: fixed; inset: 0; z-index: 50; background: var(--well-deep); cursor: none; }
+.gaze-overlay .go-dot { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: var(--ink-2); transition: left 450ms cubic-bezier(.3,.7,.3,1), top 450ms cubic-bezier(.3,.7,.3,1), background 150ms; }
+.gaze-overlay .go-dot::after { content: ''; position: absolute; left: 8px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--well-deep); }
+.gaze-overlay .go-dot.hold { background: var(--auto-live); }
+.gaze-overlay .go-cue { position: absolute; left: 0; right: 0; top: 18%; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-2); font-size: var(--fs-2); }
+.gaze-overlay .go-cue b { color: var(--ink); font-size: var(--fs-3); font-weight: 600; }
+.gaze-overlay #goCancel { position: absolute; right: 20px; bottom: 20px; cursor: pointer; }

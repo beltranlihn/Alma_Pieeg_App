@@ -4,6 +4,8 @@ import { CHANNELS } from './ble.js';
 import { XR_FACE } from './scope.js';
 import { BANDS } from './fft.js';
 import { INDICES } from './indices.js';
+import { GESTURES } from './face.js';
+import { TENSION_GROUPS } from './tension.js';
 
 export const SIGNALS = [];
 const add = (id, label, group, unit, range, get, kind = 'continuous') => SIGNALS.push({ id, label, group, unit, range, get, kind });
@@ -16,6 +18,21 @@ for (const b of BANDS) add(`abs.${b.id}`, `${b.label} · absolute power`, 'Bands
 add('dominant', 'Dominant frequency', 'Bands (forehead average)', 'Hz', [0, 40], (f) => f.avg.dominant);
 add('cal.score', 'Calibrated · 0 = your rest, 1 = your active', 'Calibration', '0–1', [0, 1], (f) => f.cal.score);
 add('cal.ready', 'Calibrated · done (1/0)', 'Calibration', '0/1', [0, 1], (f) => f.cal.ready, 'event');
+add('idx.faa', 'Alpha asymmetry · 0–1 for this person (last minute)', 'Indices (0–1, PiEEG formulas)', '0–1', [0, 1], (f) => f.faaNorm);
+add('faa', 'Alpha asymmetry · ln α right − ln α left (forehead)', 'Indices (raw ratios)', 'ln', [-1, 1], (f) => f.faa);
+add('beta.surge', 'Beta surge · β above its last ~20 s, 0–1', 'Indices (0–1, PiEEG formulas)', '0–1', [0, 1], (f) => f.betaSurge);
+for (const g of GESTURES) {
+  add(`face.${g.id}`, `${g.label} · probability (trained in Face)`, 'Face · gestures', '0–1', [0, 1], (f) => f.face[g.id]);
+  add(`face.${g.id}.on`, `${g.label} · on (1/0)`, 'Face · gestures', '0/1', [0, 1], (f) => f.faceOn[g.id], 'event');
+}
+add('gaze.x', 'Gaze · horizontal, −1 left … 1 right (EOG)', 'Face · gaze', '−1…1', [-1, 1], (f) => f.gaze.x);
+add('gaze.y', 'Gaze · vertical, −1 up … 1 down (EOG)', 'Face · gaze', '−1…1', [-1, 1], (f) => f.gaze.y);
+add('gaze.side', 'Gaze · side, −1 left · 0 centre · 1 right', 'Face · gaze', '−1/0/1', [-1, 1], (f) => f.gaze.side, 'event');
+add('gaze.ready', 'Gaze · calibrated (1/0)', 'Face · gaze', '0/1', [0, 1], (f) => f.gaze.ready, 'event');
+for (const t of TENSION_GROUPS) {
+  add(`tension.${t.id}`, `${t.label} tension · 0–1 (${t.where}, muscle above 20 Hz)`, 'Face · tension', '0–1', [0, 1], (f) => f.tension[t.id]);
+  add(`tension.${t.id}.on`, `${t.label} tension · on (1/0)`, 'Face · tension', '0/1', [0, 1], (f) => f.tension[`${t.id}On`], 'event');
+}
 add('blink.pulse', 'Blink · pulse (1 for 150 ms)', 'Events', '0/1', [0, 1], (f) => f.blinkPulse, 'event');
 add('blink.count', 'Blink · count this session', 'Events', 'n', [0, 1000], (f) => f.blinkCount, 'event');
 add('blink.amplitude', 'Blink · frontal peak-to-peak', 'Events', 'µV', [0, 400], (f) => f.blinkAmp);
@@ -34,6 +51,7 @@ for (let ch = 0; ch < CHANNELS; ch++) {
   const e = XR_FACE[ch];
   add(`ch${ch + 1}.rms`, `${e.id} · rms (1 s) · ${e.place}`, 'Per channel · amplitude', 'µV', [0, 100], (f) => f.rms[ch]);
   add(`ch${ch + 1}.env`, `${e.id} · envelope (80 ms) · ${e.place}`, 'Per channel · amplitude', 'µV', [0, 100], (f) => f.env[ch]);
+  add(`ch${ch + 1}.emg`, `${e.id} · muscle (above 20 Hz, 100 ms) · ${e.place}`, 'Per channel · amplitude', 'µV', [0, 50], (f) => f.emg[ch]);
 }
 for (let ch = 0; ch < CHANNELS; ch++) for (const b of BANDS) add(`ch${ch + 1}.${b.id}`, `${XR_FACE[ch].id} · ${b.label}`, 'Per channel · bands (absolute)', 'µV²', [0, 200], (f) => f.bands[ch][b.id]);
 

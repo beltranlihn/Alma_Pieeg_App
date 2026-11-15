@@ -1,7 +1,7 @@
 // The engine: one source (PiEEG or simulator) → DSP → rings → features. Pages subscribe to it.
 import { PiEEGDevice, CHANNELS, SAMPLE_RATE } from './ble.js';
 import { SimDevice } from './sim.js';
-import { ChannelChain } from './dsp.js';
+import { ChannelChain, WideChain, EmgEnvelope, EogChain } from './dsp.js';
 import { Rings, SampleClock } from './ring.js';
 import { assessAll, STATUS } from './quality.js';
 import { Recorder } from './record.js';
@@ -12,8 +12,13 @@ import { HeartDevice, SimHeart } from './heart.js';
 import { Session } from './session.js';
 import { SIGNAL_BY_ID } from './signals.js';
 import { Calibration } from './calibrate.js';
+import { GestureTrainer, GESTURES, faceFeatures, FEATURE_DIM } from './face.js';
+import { Gaze } from './gaze.js';
+import { Tension } from './tension.js';
 
 export const FOREHEAD = [2, 3, 4, 5];
+export const LEFT_FOREHEAD = [2, 3], RIGHT_FOREHEAD = [4, 5];   // for frontal alpha asymmetry
+const isBad = (q) => !q || q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE;
 
 function rmssdOf(rr) { if (rr.length < 3) return 0; let s = 0; for (let k = 1; k < rr.length; k++) { const d = rr[k].rr - rr[k - 1].rr; s += d * d; } return Math.sqrt(s / (rr.length - 1)); }
 
@@ -24,6 +29,18 @@ export class Engine extends EventTarget {
     this.rings = new Rings(this.fs, 60);
     this.clock = new SampleClock(this.fs);
     this.chains = Array.from({ length: CHANNELS }, () => new ChannelChain(this.fs));
+    // side chains for the face, independent of the display filters (0.8)
+    this.wideChains = Array.from({ length: CHANNELS }, () => new WideChain(this.fs, 50));
+    this.emgEnv = Array.from({ length: CHANNELS }, () => new EmgEnvelope(this.fs));
+    this.eogChains = Array.from({ length: CHANNELS }, () => new EogChain(this.fs));
+    this._wideTmp = new Float32Array(CHANNELS);
+    this.eog = new Float64Array(CHANNELS);
+    this.faceX = new Float32Array(FEATURE_DIM); this.faceReady = false;
+    this.gestures = new GestureTrainer();     // PiEEG Face Trainer
+    this.gaze = new Gaze();                   // PiEEG Eye Track, EOG
+    this.tension = new Tension();             // PiEEG artifact envelopes
+    this.faaNorm = new RollingNorm(60, 10);
+    this._faa = { l: 0, r: 0, n: 0 }; this._beta = { ema: 0, base: 0, n: 0 };
     this.recorder = new Recorder();
     this.session = new Session();
     this.liveLog = new Session(); this.liveLog.results = this.session.results;   // same result definitions
@@ -75,10 +92,22 @@ export class Engine extends EventTarget {
       strap: Array.from({ length: 9 }, () => ({ bpm: 0, beat: 0, rmssd: 0, on: 0 })),   // index = slot, 0 unused
       result: [0, 0, 0], sessionElapsed: 0, sessionActive: 0,
       cal: { score: 0, ready: this.calib && this.calib.result ? 1 : 0 },
+      face: Object.fromEntries(GESTURES.map((g) => [g.id, 0])), faceOn: Object.fromEntries(GESTURES.map((g) => [g.id, 0])),
+      gaze: { x: 0, y: 0, side: 0, ready: this.gaze && this.gaze.ready ? 1 : 0 },
+      emg: new Float32Array(CHANNELS),
+      tension: { jaw: 0, brow: 0, jawOn: 0, browOn: 0 },
+      faa: 0, faaNorm: 0.5, betaSurge: 0,
     };
   }
 
-  setFilters(patch) { Object.assign(this.filters, patch); for (const c of this.chains) c.configure(this.filters); this._emit('filters'); }
+  setFilters(patch) {
+    const mains = this.filters.notch;
+    Object.assign(this.filters, patch); for (const c of this.chains) c.configure(this.filters);
+    if (this.filters.notch !== mains) for (const c of this.wideChains) c.configure(this.filters.notch);
+    this._emit('filters');
+  }
+  /** One protocol at a time: calibration, a gesture recording, the gaze dots or the tension range. */
+  get busy() { return this.calib.running || this.gestures.recording || this.gaze.calibrating || this.tension.measuring; }
 
   _setState(state, text) { this.state = state; if (text) this.statusText = text; this._emit('state'); }
   _emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
@@ -89,9 +118,11 @@ export class Engine extends EventTarget {
     const dev = kind === 'ble' ? new PiEEGDevice() : new SimDevice();
     this.device = dev;
     dev.onStatus = (t) => { this.statusText = t; this._emit('state'); };
-    dev.onDisconnected = () => { this._setState('error', `${dev.name} disconnected`); this.device = null; this.cancelCalibration(); this._emit('disconnected'); };
+    dev.onDisconnected = () => { this._setState('error', `${dev.name} disconnected`); this.device = null; this.cancelCalibration(); this.cancelFaceProtocols(); this._emit('disconnected'); };
     this.rings.reset(); this.clock.reset(); this.blink.reset(); for (const n of Object.values(this.norms)) n.reset();
     for (const c of this.chains) c.configure(this.filters);
+    for (const c of this.wideChains) c.configure(this.filters.notch); for (const e of this.emgEnv) e.reset(); for (const e of this.eogChains) e.reset();
+    this.tension.reset(); this.faaNorm.reset(); this._faa = { l: 0, r: 0, n: 0 }; this._beta = { ema: 0, base: 0, n: 0 }; this.faceReady = false;
     this.features = this._emptyFeatures(); this.quality = null;
     this._setState('connecting', kind === 'ble' ? 'Scanning for PiEEG…' : 'Starting simulator…');
     try {
@@ -105,6 +136,7 @@ export class Engine extends EventTarget {
     this.liveLog.start('', '');
     if (kind === 'sim' && !this.heart) this.connectHeart('sim');
     this._rate = { samples: 0, t0: performance.now(), value: 0 };
+    this._recentreAt = performance.now() + 2500;   // the EOG chains start again: put the saved gaze model back on centre
     this._setState('streaming', `${dev.name} · streaming`);
     return true;
   }
@@ -112,7 +144,7 @@ export class Engine extends EventTarget {
   async disconnect() {
     if (!this.device) return;
     if (this.recorder.active) await this.stopRecording();
-    const d = this.device; this.device = null; this.cancelCalibration();
+    const d = this.device; this.device = null; this.cancelCalibration(); this.cancelFaceProtocols();
     await d.stop();
     this._setState('idle', 'No device');
   }
@@ -161,8 +193,14 @@ export class Engine extends EventTarget {
     const stamps = this.clock.stamp(arrival, samples.length);
     for (let s = 0; s < samples.length; s++) {
       const raw = samples[s];
-      for (let ch = 0; ch < CHANNELS; ch++) this._filtTmp[ch] = this.chains[ch].process(raw[ch]);
-      this.rings.push(raw, this._filtTmp);
+      for (let ch = 0; ch < CHANNELS; ch++) {
+        const x = raw[ch];
+        this._filtTmp[ch] = this.chains[ch].process(x);
+        const w = this.wideChains[ch].process(x); this._wideTmp[ch] = w;
+        this.emgEnv[ch].process(w);
+        this.eog[ch] = this.eogChains[ch].process(x);
+      }
+      this.rings.push(raw, this._filtTmp, this._wideTmp);
       this.recorder.push(stamps[s], raw);
     }
     this._rate.samples += samples.length;
@@ -174,7 +212,21 @@ export class Engine extends EventTarget {
     const calPhase = this.calib.tick(now); if (calPhase) this._onCalPhase(calPhase);
     if (this.blink.poll(r, now)) this._emit('blink', { count: this.blink.count, amplitude: this.blink.amplitude });
     f.blinkCount = this.blink.count; f.blinkPulse = this.blink.pulse(now); f.blinkAmp = this.blink.amplitude;
-    for (let ch = 0; ch < CHANNELS; ch++) { f.rms[ch] = rms(r, ch, this.fs); f.env[ch] = envelope(r, ch, this.fs); }
+    for (let ch = 0; ch < CHANNELS; ch++) { f.rms[ch] = rms(r, ch, this.fs); f.env[ch] = envelope(r, ch, this.fs); f.emg[ch] = this.emgEnv[ch].value; }
+    const bad = this.quality ? this.quality.map(isBad) : null;
+    // face: gesture probabilities (20 Hz) and gaze (20 Hz)
+    this.faceReady = !!faceFeatures(r.wide, (back) => r.at(back), r.count, this.faceX);
+    const probs = this.gestures.predict(this.faceReady ? this.faceX : null);
+    for (const g of GESTURES) {
+      f.face[g.id] = probs[g.id];
+      const on = this.gestures.on[g.id];
+      if (on !== f.faceOn[g.id]) { f.faceOn[g.id] = on; if (on && this.recorder.active) this.mark(`face_${g.id}`); this._emit('gesture', { type: on ? 'on' : 'off', id: g.id }); }
+    }
+    if (this._recentreAt && now > this._recentreAt) { this._recentreAt = 0; if (this.gaze.model && !this.gaze.calibrating) this.gaze.recentre(); }
+    const gz = this.gaze.update(now, this.eog, { blinking: this.blink.above, bad, dt: 0.05 });
+    if (gz) { if (gz.done && this.recorder.active) this.mark('gaze_done'); this._emit('gaze', gz.done ? { type: 'done', ok: gz.ok } : { type: 'phase', ...gz }); if (gz.done) this._emit('face-model'); }
+    if (this.gaze.side !== f.gaze.side) this._emit('gaze', { type: 'side', side: this.gaze.side });
+    f.gaze.x = this.gaze.x; f.gaze.y = this.gaze.y; f.gaze.side = this.gaze.side; f.gaze.ready = this.gaze.ready ? 1 : 0;
     // spectrum of every channel every 100 ms (two ticks)
     if (!this._fftPhase) this._fftPhase = 0;
     if (++this._fftPhase % 2 === 0) {
@@ -202,6 +254,36 @@ export class Engine extends EventTarget {
       f.calm = f.idx.calm;
       if (this.calib.recording) this.calib.feed(f.bands, f.idx, this.quality && this.quality.map((q) => q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE));
       f.cal.score = this.calib.score(f.bands); f.cal.ready = this.calib.result ? 1 : 0;
+      // gesture recording (10 Hz, as PiEEG's capture)
+      if (this.gestures.recording) {
+        const id = this.gestures.rec.id, st = this.gestures.step(now, this.faceReady ? this.faceX : null);
+        if (st && st.changed) {
+          if (st.done && this.recorder.active) this.mark(`train_${id}_done`);
+          this._emit('gesture', { type: st.done ? 'trained' : 'phase', id, phase: st.phase, cycleLabel: st.cycleLabel });
+          if (st.done) this._emit('face-model');
+        }
+      }
+      // muscle tension (10 Hz)
+      this.tension.push(f.emg, bad);
+      const tj = this.tension.groups.jaw, tb = this.tension.groups.brow;
+      if (tj.on !== f.tension.jawOn || tb.on !== f.tension.browOn) this._emit('tension', { type: 'on' });
+      f.tension.jaw = tj.value; f.tension.brow = tb.value; f.tension.jawOn = tj.on; f.tension.browOn = tb.on;
+      if (this.tension.measuring) { const st = this.tension.stepRange(now); if (st) { this._emit('tension', { type: st.done ? 'range' : 'step', ...st }); if (st.done) this._emit('face-model'); } }
+      // frontal alpha asymmetry: ln α right − ln α left (PiEEG Glitching Reality), and the beta surge against
+      // a ~20 s baseline (PiEEG Premeditatio Malorum): how far beta jumps above the person's recent level
+      const side = (chs) => { let s = 0, n = 0; for (const ch of chs) if (!bad || !bad[ch]) { s += f.bands[ch].alpha; n++; } return n ? s / n : null; };
+      const aL = side(LEFT_FOREHEAD), aR = side(RIGHT_FOREHEAD);
+      if (aL != null && aR != null) {
+        if (!this._faa.n++) { this._faa.l = aL; this._faa.r = aR; }
+        this._faa.l += (aL - this._faa.l) * 0.22; this._faa.r += (aR - this._faa.r) * 0.22;
+        f.faa = Math.log(Math.max(this._faa.r, 1e-9)) - Math.log(Math.max(this._faa.l, 1e-9));
+        f.faaNorm = this.faaNorm.push(f.faa);
+      }
+      // the baseline is a plain running mean for the first 20 s, then an EMA of ~20 s
+      const B = this._beta;
+      if (!B.n++) { B.ema = avg.beta; B.base = avg.beta; }
+      B.ema += (avg.beta - B.ema) * 0.18; B.base += (B.ema - B.base) * Math.max(0.005, 1 / B.n);
+      f.betaSurge = B.base > 1e-9 ? Math.max(0, Math.min(1, (B.ema - B.base) / B.base)) : 0;
     }
     // straps by slot
     const wall = Date.now();
@@ -231,7 +313,7 @@ export class Engine extends EventTarget {
 
   // ── Calibration (REST / ACTIVE, per person) ────────────────────────────
   startCalibration(opts = {}) {
-    if (this.state !== 'streaming') return false;
+    if (this.state !== 'streaming' || this.busy) return false;
     const participant = opts.participant ?? ((document.getElementById('participant') || {}).value || '').trim();
     this.calib.start(performance.now(), { ...opts, participant });
     if (this.recorder.active) this.mark('cal_start');
@@ -244,6 +326,31 @@ export class Engine extends EventTarget {
     if (this.recorder.active && (phase === 'rest' || phase === 'active' || phase === 'done')) this.mark(`cal_${phase}`);
     this._emit('calib', { phase });
   }
+
+  // ── Face: gestures, gaze, tension range ─────────────────────────────────
+  startGesture(id) {
+    if (this.state !== 'streaming' || this.busy) return false;
+    const who = ((document.getElementById('participant') || {}).value || '').trim();
+    if (who) this.gestures.participant = who;
+    const cycles = this.gestures.start(id, performance.now());
+    if (this.recorder.active) this.mark(`train_${id}_start`);
+    this._emit('gesture', { type: 'start', id, cycles }); return true;
+  }
+  cancelGesture() { if (!this.gestures.recording) return; const id = this.gestures.rec.id; this.gestures.cancel(); this._emit('gesture', { type: 'cancelled', id }); }
+  clearGesture(id) { if (this.gestures.rec && this.gestures.rec.id === id) this.gestures.cancel(); this.gestures.clear(id); this._emit('gesture', { type: 'cleared', id }); this._emit('face-model'); }
+  clearGestures() { this.gestures.cancel(); this.gestures.clearAll(); this._emit('gesture', { type: 'cleared' }); this._emit('face-model'); }
+  startGaze() { if (this.state !== 'streaming' || this.busy) return false; this.gaze.start(performance.now()); if (this.recorder.active) this.mark('gaze_start'); this._emit('gaze', { type: 'start' }); return true; }
+  recentreGaze() { this.gaze.recentre(); this._emit('gaze', { type: 'recentre' }); }
+  resetGaze() { this.gaze.reset(); this._emit('gaze', { type: 'reset' }); this._emit('face-model'); }
+  startTensionRange() { if (this.state !== 'streaming' || this.busy) return false; this.tension.startRange(performance.now()); this._emit('tension', { type: 'start' }); return true; }
+  clearTensionRange() { this.tension.clearRange(); this._emit('tension', { type: 'cleared' }); this._emit('face-model'); }
+  cancelFaceProtocols() {
+    this.cancelGesture();
+    if (this.gaze.calibrating) { this.gaze.cancel(); this._emit('gaze', { type: 'cancelled' }); }
+    if (this.tension.measuring) { this.tension.cancelRange(); this._emit('tension', { type: 'cancelled' }); }
+  }
+  faceModelJSON() { return { gestures: this.gestures.toJSON(), gaze: this.gaze.toJSON(), tension: this.tension.toJSON() }; }
+  loadFaceModel(j) { if (!j) return; this.gestures.fromJSON(j.gestures); this.gaze.fromJSON(j.gaze); this.tension.fromJSON(j.tension); }
 
   // ── Session (participant + results + files) ────────────────────────────
   startSession(participant, notes) {
@@ -259,7 +366,7 @@ export class Engine extends EventTarget {
     const who = (this.session.participant || 'session').trim().replace(/[^A-Za-z0-9._-]+/g, '-');
     const name = `${who}_${stamp}`;
     const meta = JSON.parse(this.recorder.toMeta({ device: this.deviceName, sample_rate: this.fs, filters: { ...this.filters }, contact_at_end: this.quality }));
-    const files = { '.raw.csv': this.recorder.toCSV(), '.features.csv': this.session.featuresCSV(), '.summary.json': JSON.stringify({ ...summary, calibrated: !!this.calib.result, calibration: this.calib.toJSON(), device: this.deviceName, sample_rate: this.fs, filters: { ...this.filters }, marks: meta.marks, raw_samples: meta.samples }, null, 2) };
+    const files = { '.raw.csv': this.recorder.toCSV(), '.features.csv': this.session.featuresCSV(), '.summary.json': JSON.stringify({ ...summary, calibrated: !!this.calib.result, calibration: this.calib.toJSON(), face: { gestures: this.gestures.summary(), gaze: this.gaze.summary(), tension: this.tension.toJSON() }, device: this.deviceName, sample_rate: this.fs, filters: { ...this.filters }, marks: meta.marks, raw_samples: meta.samples }, null, 2) };
     let paths = [];
     try { paths = await window.alma.saveFiles(name, files); } catch (e) { this._emit('error', e); }
     this._emit('session'); this._emit('saved', { name, path: paths[0] || '', paths });

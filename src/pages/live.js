@@ -8,7 +8,13 @@ import { STATUS } from '../quality.js';
 import { PALETTES, PALETTE_BY_ID, DEFAULT_CUSTOM } from '../palettes.js';
 import { RESULT_METHODS, METHOD_BY_ID } from '../session.js';
 import { SIGNALS, SIGNAL_BY_ID } from '../signals.js';
-import { INDEX_COLOR, signalColor } from '../colors.js';
+import { INDEX_COLOR, signalColor, FAA_COLOR, BAND_COLOR } from '../colors.js';
+
+// Two more cards next to the band-ratio indices (0.8): they are not ratios of the forehead average.
+const EXTRA = [
+  { id: 'faa', label: 'Alpha asymmetry', formula: 'ln α right − ln α left', source: 'PiEEG Glitching Reality · forehead, left vs right', color: FAA_COLOR, norm: (f) => f.faaNorm, raw: (f) => f.faa, rawLabel: 'ln' },
+  { id: 'surge', label: 'Beta surge', formula: 'β above its last ~20 s', source: 'PiEEG Premeditatio Malorum · use Recovery in the results', color: BAND_COLOR.beta, norm: (f) => f.betaSurge, raw: (f) => f.betaSurge, rawLabel: '0–1' },
+];
 
 const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '' };
 
@@ -163,6 +169,11 @@ export function mountLive(root, { engine, ui, saveConfig }) {
     el.innerHTML = `<div class="index-head"><i class="swatch" style="background:${INDEX_COLOR[i.id]}"></i><b>${i.label}</b><span class="formula">${i.formula}</span><span class="raw"></span></div><canvas class="spark"></canvas><div class="meter"><div class="meter-fill" style="background:${INDEX_COLOR[i.id]}"></div><div class="meter-mid"></div></div><div class="index-foot">${i.source} · 0–1 against this person's <span class="norm-mode">last minute</span> · last 60 s</div>`;
     idxEl.appendChild(el); return el;
   });
+  const extraRows = EXTRA.map((x) => {
+    const el = document.createElement('div'); el.className = 'index';
+    el.innerHTML = `<div class="index-head"><i class="swatch" style="background:${x.color}"></i><b>${x.label}</b><span class="formula">${x.formula}</span><span class="raw"></span></div><canvas class="spark"></canvas><div class="meter"><div class="meter-fill" style="background:${x.color}"></div><div class="meter-mid"></div></div><div class="index-foot">${x.source} · last 60 s</div>`;
+    idxEl.appendChild(el); return el;
+  });
   const blinkEl = document.createElement('div'); blinkEl.className = 'index index-blink';
   blinkEl.innerHTML = `<div class="index-head"><b>Blinks</b><span class="formula">frontal peak-to-peak · adaptive threshold</span><span class="raw"></span></div><div class="index-foot">Count this session · last blink · threshold</div>`;
   idxEl.appendChild(blinkEl);
@@ -177,8 +188,13 @@ export function mountLive(root, { engine, ui, saveConfig }) {
     $('indexRows').appendChild(row);
   });
 
-  const sparkHist = Object.fromEntries(INDICES.map((i) => [i.id, []]));
-  setInterval(() => { if (engine.state !== 'streaming') return; for (const i of INDICES) { const h = sparkHist[i.id]; h.push(engine.features.idxNorm[i.id]); if (h.length > 600) h.shift(); } }, 100);
+  const sparkHist = Object.fromEntries(INDICES.map((i) => [i.id, []]).concat(EXTRA.map((x) => [x.id, []])));
+  setInterval(() => {
+    if (engine.state !== 'streaming') return;
+    const push = (id, v) => { const h = sparkHist[id]; h.push(v); if (h.length > 600) h.shift(); };
+    for (const i of INDICES) push(i.id, engine.features.idxNorm[i.id]);
+    for (const x of EXTRA) push(x.id, x.norm(engine.features));
+  }, 100);
   function drawSpark(cv, hist, color) {
     const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
     if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
@@ -196,6 +212,12 @@ export function mountLive(root, { engine, ui, saveConfig }) {
       el.querySelector('.meter-fill').style.width = `${(n * 100).toFixed(1)}%`;
       el.querySelector('.raw').innerHTML = `<b>${n.toFixed(2)}</b> <span>ratio ${r.toFixed(2)}</span>`;
       drawSpark(el.querySelector('.spark'), sparkHist[i.id], INDEX_COLOR[i.id]);
+    });
+    EXTRA.forEach((x, k) => {
+      const el = extraRows[k], n = x.norm(f), r = x.raw(f);
+      el.querySelector('.meter-fill').style.width = `${(n * 100).toFixed(1)}%`;
+      el.querySelector('.raw').innerHTML = `<b>${n.toFixed(2)}</b> <span>${x.rawLabel} ${r.toFixed(2)}</span>`;
+      drawSpark(el.querySelector('.spark'), sparkHist[x.id], x.color);
     });
     const b = engine.blink;
     blinkEl.querySelector('.raw').textContent = `${b.count} · ${b.lastBlink ? `${((performance.now() - b.lastBlink) / 1000).toFixed(0)} s ago` : '—'} · ${b.threshold.toFixed(0)} µV`;

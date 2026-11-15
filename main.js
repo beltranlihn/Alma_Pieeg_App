@@ -1,6 +1,6 @@
 // EEG Alma Center — main process.
 // Owns the window, the Bluetooth device chooser (Web Bluetooth needs a host handler in Electron),
-// the config file, the session files and the OSC/UDP sockets. BLE, DSP and drawing live in the renderer.
+// the config file, the session files, the OSC/UDP sockets and the WebSocket listeners. BLE, DSP and drawing live in the renderer.
 'use strict';
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
@@ -9,6 +9,8 @@ const fs = require('fs');
 const dgram = require('dgram');
 const { encode } = require('./osc-encode.js');
 const ant = require('./ant.js');
+const { Hub } = require('./ws-server.js');
+const wsHub = new Hub();
 
 let win = null;
 let pendingBleCallback = null;   // Chromium re-emits select-bluetooth-device as devices appear
@@ -109,6 +111,11 @@ ipcMain.on('osc-send', (_e, messages) => {
 });
 ipcMain.handle('osc-stats', () => ({ ...oscStats }));
 
+// ── IPC: WebSocket (JSON to any client that connects) ────────────────────────
+ipcMain.on('ws-sync', (_e, list) => { try { wsHub.sync(Array.isArray(list) ? list : []); } catch (_) { /* reported in stats */ } });
+ipcMain.on('ws-send', (_e, messages) => { try { wsHub.send(messages); } catch (_) { /* a client went away */ } });
+ipcMain.handle('ws-stats', () => wsHub.stats());
+
 // ── IPC: ANT+ straps ──────────────────────────────────────────────────────────
 ipcMain.handle('ant-start', async () => ant.start());
 ipcMain.handle('ant-stop', () => ant.stop());
@@ -116,4 +123,4 @@ ipcMain.handle('ant-status', () => ant.getStatus());
 ant.onEvent((type, payload) => { if (win && !win.isDestroyed()) win.webContents.send('ant-event', { type, payload }); });
 
 app.whenReady().then(createWindow);
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => { wsHub.closeAll(); app.quit(); });

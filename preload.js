@@ -5,10 +5,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 const argv = process.argv;
 const pageArg = argv.find((a) => a.startsWith('--page='));
 const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return a ? a.split('=')[1] : null; };
-const flags = { sim: argv.includes('--sim'), events: argv.includes('--events'), page: pageArg ? pageArg.split('=')[1] : null, preset: arg('preset'), view: arg('view'), session: arg('session'), calib: arg('calib') };
+const flags = { sim: argv.includes('--sim'), events: argv.includes('--events'), page: pageArg ? pageArg.split('=')[1] : null, preset: arg('preset'), view: arg('view'), session: arg('session'), calib: arg('calib'), face: arg('face'), wstest: arg('wstest'), gaze: argv.includes('--gaze'), tension: argv.includes('--tension') };
 
 contextBridge.exposeInMainWorld('alma', {
-  version: '0.7.0',
+  version: '0.8.0',
   flags,
   saveSession: (name, csvText, metaJson) => ipcRenderer.invoke('save-session', name, csvText, metaJson),
   saveFiles: (name, files) => ipcRenderer.invoke('save-files', name, files),
@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('alma', {
   saveConfig: (json) => ipcRenderer.invoke('config-save', json),
   oscSend: (messages) => ipcRenderer.send('osc-send', messages),
   oscStats: () => ipcRenderer.invoke('osc-stats'),
+  wsSync: (list) => ipcRenderer.send('ws-sync', list),
+  wsSend: (messages) => ipcRenderer.send('ws-send', messages),
+  wsStats: () => ipcRenderer.invoke('ws-stats'),
   antStart: () => ipcRenderer.invoke('ant-start'),
   antStop: () => ipcRenderer.invoke('ant-stop'),
   antStatus: () => ipcRenderer.invoke('ant-status'),
