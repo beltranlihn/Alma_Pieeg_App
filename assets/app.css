@@ -13,6 +13,7 @@ nav button { background: none; border: 0; border-bottom: 2px solid transparent; 
 nav button:hover { background: none; color: var(--ink-2); }
 nav button.on { color: var(--ink); border-bottom-color: var(--ink); }
 header .status { display: flex; align-items: center; gap: 8px; color: var(--ink-2); flex: 1; min-width: 0; justify-content: flex-end; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header .status #hdrText { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-dim); flex: none; }
 .dot.on { background: var(--toggle-on); }
 .dot.warn { background: var(--auto-ovr); }

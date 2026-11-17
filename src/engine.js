@@ -118,6 +118,7 @@ export class Engine extends EventTarget {
     const dev = kind === 'ble' ? new PiEEGDevice() : new SimDevice();
     this.device = dev;
     dev.onStatus = (t) => { this.statusText = t; this._emit('state'); };
+    dev.onReconnected = () => { this.statusText = `${dev.name} · streaming`; this._emit('state'); };
     dev.onDisconnected = () => { this._setState('error', `${dev.name} disconnected`); this.device = null; this.cancelCalibration(); this.cancelFaceProtocols(); this._emit('disconnected'); };
     this.rings.reset(); this.clock.reset(); this.blink.reset(); for (const n of Object.values(this.norms)) n.reset();
     for (const c of this.chains) c.configure(this.filters);
@@ -133,14 +134,17 @@ export class Engine extends EventTarget {
       await dev.start((samples, arrival) => this._onSamples(samples, arrival));
     } catch (e) {
       this.device = null;
-      const msg = e && e.name === 'NotFoundError' ? 'No PiEEG found. Is it powered, within 5 m, and free (not taken by BodyPress or Cloud)?' : `Could not connect: ${e.message || e}`;
+      const gatt = /GATT|disconnected|NetworkError/i.test(String(e && (e.message || e)));
+      const msg = e && e.name === 'NotFoundError' ? 'No PiEEG found. Is it powered, within 5 m, and free (not taken by BodyPress or Cloud)?'
+        : gatt ? 'The PiEEG dropped the link while connecting (tried 3 times). Bring it closer to this computer and press Connect again.'
+        : `Could not connect: ${e.message || e}`;
       this._setState('error', msg); return false;
     }
     this.startedAt = Date.now();
     this.liveLog.start('', '');
     if (kind === 'sim' && !this.heart) this.connectHeart('sim');
     this._rate = { samples: 0, t0: performance.now(), value: 0 };
-    this._recentreAt = performance.now() + 2500;   // the EOG chains start again: put the saved gaze model back on centre
+    this._recentreAt = performance.now() + 2500; this.startedAtPerf = performance.now(); this._lastSampleAt = 0; this._stalled = false;   // the EOG chains start again: put the saved gaze model back on centre
     this._setState('streaming', `${dev.name} · streaming`);
     return true;
   }
@@ -208,6 +212,8 @@ export class Engine extends EventTarget {
       this.recorder.push(stamps[s], raw);
     }
     this._rate.samples += samples.length;
+    this._lastSampleAt = performance.now();
+    if (this._stalled) { this._stalled = false; this.statusText = `${this.deviceName} · streaming`; this._emit('state'); }
   }
 
   _tick() {
@@ -306,6 +312,14 @@ export class Engine extends EventTarget {
 
   _slow() {
     if (!this.device) return;
+    // Connected but silent: the PiEEG can keep the link and stop sending (seen after a signal loss; a fresh
+    // connection does not help, only power). Say so instead of showing stale contact as if it were live.
+    const silentMs = performance.now() - (this._lastSampleAt || this.startedAtPerf || performance.now());
+    if (this.state === 'streaming' && silentMs > 5000 && !/reconnecting/i.test(this.statusText)) {
+      if (!this._stalled) { this._stalled = true; this.quality = null; this.features.contactGood = 0; this.features.contactOk = 0; this._emit('quality'); }
+      this.statusText = `Connected, but no data for ${Math.round(silentMs / 1000)} s. Unplug the PiEEG box for 5 s, plug it back, then Connect.`;
+      this.features.rate = 0; this._emit('state'); return;
+    }
     this.quality = assessAll(this.rings, this.fs);
     const good = this.quality.filter((q) => q.status === STATUS.GOOD).length;
     this.features.contactGood = good; this.features.contactOk = good === CHANNELS ? 1 : 0;

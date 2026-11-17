@@ -10,6 +10,8 @@ export const BYTES_PER_SAMPLE = CHANNELS * 3;
 export const SAMPLE_RATE = 250;
 const UV_PER_COUNT = 4.5 / 16777215 * 1e6;   // ≈ 0.268 µV, ADS1299 at gain 1 as PiEEG scales it
 
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
 export function decodeSample(bytes, offset, out) {
   for (let ch = 0; ch < CHANNELS; ch++) {
     const i = offset + ch * 3;
@@ -46,8 +48,32 @@ export class PiEEGDevice {
     });
     this.name = this.device.name || 'PiEEG';
     this.device.addEventListener('gattserverdisconnected', this._onDisconnect);
-    this._status(`Connecting to ${this.name}…`);
-    const server = await this.device.gatt.connect();
+    this._stopping = false; this._starting = true;
+    // Windows often drops the link in the first second (GATT "disconnected" while reading the services),
+    // more so with a weak signal. Try a few times before giving up.
+    try {
+      for (let attempt = 1; ; attempt++) {
+        try { this._status(`Connecting to ${this.name}…${attempt > 1 ? ` (try ${attempt} of 3)` : ''}`); await this._open(); break; }
+        catch (e) { if (attempt >= 3) { try { this.device.gatt.disconnect(); } catch (_) { /* gone */ } throw e; } await wait(700); }
+      }
+    } finally { this._starting = false; }
+    this._status(`Streaming from ${this.name}`);
+  }
+
+  /** GATT connect → the notify characteristic → notifications on. Also used to reconnect. */
+  async _open() {
+    this._opening = true;
+    try {
+      const server = await this.device.gatt.connect();
+      const char = await this._findChar(server);
+      this.char = char;
+      char.removeEventListener('characteristicvaluechanged', this._onNotify);
+      char.addEventListener('characteristicvaluechanged', this._onNotify);
+      await char.startNotifications();
+    } finally { this._opening = false; }
+  }
+
+  async _findChar(server) {
     let char = null;
     try {
       const service = await server.getPrimaryService(SERVICE_UUID);
@@ -62,13 +88,11 @@ export class PiEEGDevice {
       }
       if (!char) throw new Error('Notify characteristic fe42 not found on this device');
     }
-    this.char = char;
-    char.addEventListener('characteristicvaluechanged', this._onNotify);
-    await char.startNotifications();
-    this._status(`Streaming from ${this.name}`);
+    return char;
   }
 
   async stop() {
+    this._stopping = true;
     try { if (this.char) { this.char.removeEventListener('characteristicvaluechanged', this._onNotify); await this.char.stopNotifications(); } } catch (_) {}
     try { if (this.device && this.device.gatt.connected) this.device.gatt.disconnect(); } catch (_) {}
     this.char = null;
@@ -89,10 +113,21 @@ export class PiEEGDevice {
     if (this.onSamples) this.onSamples(samples, performance.now());
   }
 
-  _onDisconnect() {
+  /** The link dropped: try to come back on our own (5 tries over ~15 s) before telling the engine. */
+  async _onDisconnect() {
     this.char = null;
-    this._status('Device disconnected');
-    if (this.onDisconnected) this.onDisconnected();
+    if (this._stopping || this._starting || this._opening || this._reconnecting) return;
+    this._reconnecting = true;
+    try {
+      for (let attempt = 1; attempt <= 5 && !this._stopping; attempt++) {
+        this._status(`Signal lost · reconnecting (${attempt} of 5)…`);
+        await wait(attempt === 1 ? 500 : 3000);
+        if (this._stopping) return;
+        try { await this._open(); this.stats.reconnects = (this.stats.reconnects || 0) + 1; this._status(`Streaming from ${this.name}`); if (this.onReconnected) this.onReconnected(); return; }
+        catch (_) { /* next try */ }
+      }
+      if (!this._stopping) { this._status('Device disconnected'); if (this.onDisconnected) this.onDisconnected(); }
+    } finally { this._reconnecting = false; }
   }
 
   _status(text) { if (this.onStatus) this.onStatus(text); }

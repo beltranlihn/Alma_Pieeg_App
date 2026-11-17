@@ -51,6 +51,14 @@ function createWindow() {
   if (sizeArg) { const [w, h] = sizeArg.split('=')[1].split('x').map(Number); win.setContentSize(w, h); }
   win.loadFile('index.html');
 
+  // --connect: press Connect PiEEG once the page is up. Web Bluetooth only starts from a user gesture, so the
+  // click is sent as one (executeJavaScript with userGesture = true).
+  if (process.argv.includes('--connect')) {
+    win.webContents.once('did-finish-load', () => setTimeout(() => {
+      win.webContents.executeJavaScript("document.getElementById('hdrConnect').click()", true).catch(() => {});
+    }, 1500));
+  }
+
   // Self-test harness: `electron . --sim --shot=C:\path\out.png --quit-after=6000` captures the window.
   const shotArg = process.argv.find((a) => a.startsWith('--shot='));
   const quitArg = process.argv.find((a) => a.startsWith('--quit-after='));
