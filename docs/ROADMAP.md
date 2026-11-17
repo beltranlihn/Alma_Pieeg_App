@@ -46,6 +46,28 @@ below is still to be measured on a real face:
 
 Left out on purpose: P300 and SSVEP (need repeated stimuli), webhooks, the LLM agent (later, once there is data).
 
+## First real tests (2026-11-17)
+
+Bluetooth to Windows works at 250 SPS; the head between the box and the PC drops packets (5–25 %) and turning
+away cuts the link; after a cut the board can stay connected and silent until power-cycled (also with bleak).
+Contact: with the reference disc badly seated every channel carried the same ~50 µV (r 0.99); seated, r ≈ 0.82 and
+the per-electrode noise 6–9 µV, close to PiEEG's own dataset. Our prototype mask (Quest 3S, used on a Quest 3) is
+wired differently from the drawing: Ref on the right forehead, Bias on the lower right temple. 0.10 answers all of
+this in the app (map editor, reference check, honest railed, blinks, average reference, reconnects).
+PiEEG (meeting 11-17): the Bluetooth losses are the PC/adapter side; the signal improves a lot with a board made for
+the Quest 3; Ref/Bias position matters little and can be reordered to the docs; they support GITEX.
+
+## Next for interactive work (research 2026-11-17)
+
+From PiEEG's dashboard and other EEG software (OpenBCI GUI, Mind Monitor, Emotiv, Neurosity), what an artist or an
+installation would use first: **markers in** (keys and OSC/UDP from Unreal or TouchDesigner, stamped in the files);
+**region bundles** (frontal, left/right, temples as ready-made 0–1 outputs); **rules → events** (above X for N s,
+cooldown, OSC/HTTP for lights and cues); **ready-made receivers** (TouchDesigner .tox, Max for Live device, Unreal
+Blueprint); **per-visitor quick baseline**, **idle state between visitors** and **safe values when the signal drops**
+for unattended installations; **LSL out**; **MIDI out** (virtual port); **replay a saved session as a live source** to
+rehearse a patch without the mask; then a gesture "joystick" (x/y from jaw, brow, gaze), a remote viewer, cue
+sheets, P300 selection and trained mental commands (experimental on frontal dry electrodes).
+
 ## Later: the app itself
 
 From `docs/UX.md` §4: big status line on Home, electrode ↔ row hover, scrubbing a saved raw file through the views,
