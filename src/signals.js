@@ -6,6 +6,7 @@ import { BANDS } from './fft.js';
 import { INDICES } from './indices.js';
 import { GESTURES } from './face.js';
 import { TENSION_GROUPS } from './tension.js';
+import { ARKIT } from './arkit.js';
 
 export const SIGNALS = [];
 const add = (id, label, group, unit, range, get, kind = 'continuous') => SIGNALS.push({ id, label, group, unit, range, get, kind });
@@ -52,6 +53,7 @@ add('contact.good', 'Contact · channels good', 'Contact', 'n', [0, CHANNELS], (
 add('contact.ref', 'Contact · reference quiet (1/0)', 'Contact', '0/1', [0, 1], (f) => f.refOk, 'event');
 add('contact.common', 'Contact · signal common to all channels (reference noise)', 'Contact', 'µV', [0, 100], (f) => f.refCommon);
 add('stream.rate', 'Stream · samples per second', 'Contact', '/s', [0, 300], (f) => f.rate);
+for (const n of ARKIT) add(`arkit.${n}`, `${n} · ARKit blendshape (what the mask reads)`, 'Face · ARKit blendshapes (avatars)', '0–1', [0, 1], (f) => f.arkit[n]);
 add('stream.loss', 'Stream · share of samples lost on Bluetooth (0–1)', 'Contact', '0–1', [0, 1], (f) => f.loss);
 // regions: follow the electrode map, leave out channels without contact
 const REGIONS = [['lf', 'Left forehead'], ['rf', 'Right forehead'], ['lt', 'Left temples'], ['rt', 'Right temples']];

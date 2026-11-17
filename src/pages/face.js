@@ -9,6 +9,7 @@ import { TENSION_GROUPS, RANGE_TOTAL_S, rangeStepAt } from '../tension.js';
 import { XR_FACE } from '../scope.js';
 import { GAZE_COLOR, TENSION_COLOR, FACE_COLOR } from '../colors.js';
 import { cues } from '../tones.js';
+import { FaceMirror } from '../facemirror.js';
 
 const READY_COLOR = { ready: 'var(--toggle-on)', improving: 'var(--auto-ovr)', weak: 'var(--danger)', 'record again': 'var(--ink-3)' };
 import { groups, onMontage } from '../montage.js';
@@ -23,6 +24,7 @@ export function mountFace(root, { engine, ui, saveConfig }) {
           <button class="subtab" data-view="gestures">Gestures</button>
           <button class="subtab" data-view="gaze">Gaze</button>
           <button class="subtab" data-view="tension">Tension</button>
+          <button class="subtab" data-view="mirror">Mirror</button>
           <div class="subtabs-right" id="faceStatus"></div>
         </div>
         <div class="face-cue hidden" id="faceCue">
@@ -33,6 +35,7 @@ export function mountFace(root, { engine, ui, saveConfig }) {
         <div class="view" id="fvGestures"><div class="gesture-list" id="gestureList"></div></div>
         <div class="view hidden" id="fvGaze"><canvas id="gazeCanvas"></canvas></div>
         <div class="view hidden" id="fvTension"><canvas id="tensionCanvas"></canvas></div>
+        <div class="view hidden" id="fvMirror"><div class="mirror-stage" id="mirrorStage"></div><div class="mirror-note" id="mirrorNote"></div></div>
         <div class="empty" id="faceEmpty"><b>Nothing streaming</b><div>Connect on Home, or start the Simulator.</div></div>
       </div>
       <aside class="live-side">
@@ -56,6 +59,15 @@ export function mountFace(root, { engine, ui, saveConfig }) {
           <div class="rows contact" id="zLive"></div>
           <div class="hint">From the eye's own dipole on the temples and forehead. Left, centre and right are dependable; up and down less so. Keep the head still while the dots run.</div>
         </div>
+        <div data-for="mirror">
+          <h2><span>Mirror<span class="count" id="mState"></span></span><button class="seg" id="mReset">Reset view</button></h2>
+          <div class="rows">
+            <div class="row"><div class="k">Show</div><div class="seg-group" id="mSide"><button class="seg" data-v="mirror">As a mirror</button><button class="seg" data-v="others">As others see you</button></div></div>
+          </div>
+          <div class="rows contact" id="mRows"></div>
+          <div class="hint">The face does what the mask reads, not what a camera sees: blinks, trained gestures (Gestures), the gaze once calibrated (Gaze) and, where no gesture is trained, the muscle tension. Smile and pucker are far from the electrodes: expect them weak. The same values go out as ARKit blendshapes (Routing › Face · ARKit) to drive an avatar in Unreal, Unity or TouchDesigner.</div>
+          <div class="hint dim">Face model: facecap.glb by Face Cap (Bannaflak), from the three.js examples, as PiEEG's Face Trainer uses it. Its licence is not stated: internal use until confirmed.</div>
+        </div>
         <div data-for="tension">
           <h2><span>Tension<span class="count" id="tState"></span></span><button class="seg danger" id="tClear">Auto</button></h2>
           <div class="rows">
@@ -75,10 +87,47 @@ export function mountFace(root, { engine, ui, saveConfig }) {
   function setView(v) {
     view = v; ui.faceView = v; saveConfig();
     root.querySelectorAll('#faceViews .subtab').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
-    $('fvGestures').classList.toggle('hidden', v !== 'gestures'); $('fvGaze').classList.toggle('hidden', v !== 'gaze'); $('fvTension').classList.toggle('hidden', v !== 'tension');
+    $('fvGestures').classList.toggle('hidden', v !== 'gestures'); $('fvGaze').classList.toggle('hidden', v !== 'gaze'); $('fvTension').classList.toggle('hidden', v !== 'tension'); $('fvMirror').classList.toggle('hidden', v !== 'mirror');
+    if (v === 'mirror') ensureMirror();
     root.querySelectorAll('[data-for]').forEach((el) => { el.style.display = el.dataset.for.split(' ').includes(v) ? '' : 'none'; });
   }
   root.querySelectorAll('#faceViews .subtab').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+
+  // ── mirror: a face that does what the mask reads ──
+  let mirror = null;
+  const DRIVERS = [
+    ['Blink', (f) => (f.blinkPulse ? 1 : 0), null], ['Blink hard', null, 'blink_hard'], ['Wink left', null, 'wink_left'], ['Wink right', null, 'wink_right'],
+    ['Brows up', null, 'brows_up'], ['Frown', null, 'frown'], ['Jaw open', null, 'jaw_open'], ['Clench', null, 'clench'], ['Smile', null, 'smile'], ['Pucker', null, 'pucker'],
+    ['Gaze ← →', (f) => (f.gaze.ready ? f.gaze.x : null), null, true], ['Gaze ↑ ↓', (f) => (f.gaze.ready ? -f.gaze.y : null), null, true],
+    ['Jaw tension', (f) => f.tension.jaw, null], ['Brow tension', (f) => f.tension.brow, null],
+  ];
+  const mRows = DRIVERS.map(([label]) => { const r = document.createElement('div'); r.className = 'row'; r.innerHTML = `<div class="k">${label}</div><div class="v"><span class="mbar"><i></i></span><span class="mval"></span></div>`; return r; });
+  function ensureMirror() {
+    if (mirror) return;
+    $('mRows').append(...mRows);
+    mirror = new FaceMirror($('mirrorStage')); mirror.mirror = (ui.mirrorSide || 'mirror') === 'mirror';
+    if ((window.alma.flags || {}).probe) window.almaMirror = mirror;      // the self-test probe drives it
+    $('mSide').querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.v === (ui.mirrorSide || 'mirror')); b.addEventListener('click', () => { ui.mirrorSide = b.dataset.v; mirror.mirror = b.dataset.v === 'mirror'; $('mSide').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); saveConfig(); }); });
+    $('mReset').addEventListener('click', () => mirror.resetView());
+  }
+  function refreshMirror() {
+    if (!mirror || view !== 'mirror') return;
+    const f = engine.features, trained = engine.gestures.models;
+    if (!mirror.override) mirror.set(f.arkit, { x: f.gaze.x, y: f.gaze.y, on: !!f.gaze.ready });
+    DRIVERS.forEach(([, get, id, signed], i) => {
+      const r = mRows[i], bar = r.querySelector('i'), val = r.querySelector('.mval');
+      const v = id ? (trained[id] ? f.face[id] : null) : get(f);
+      r.classList.toggle('dim', v === null);
+      if (v === null) { bar.style.width = '0'; bar.style.marginLeft = '0'; val.textContent = id ? 'not trained' : 'not calibrated'; return; }
+      if (signed) { const w = Math.min(1, Math.abs(v)) * 50; bar.style.width = `${w}%`; bar.style.marginLeft = v < 0 ? `${50 - w}%` : '50%'; }
+      else { bar.style.width = `${Math.min(1, Math.max(0, v)) * 100}%`; bar.style.marginLeft = '0'; }
+      val.textContent = v.toFixed(2);
+    });
+    const n = Object.keys(trained).length;
+    $('mState').textContent = `${n} gesture${n === 1 ? '' : 's'} trained · gaze ${f.gaze.ready ? 'on' : 'off'}`;
+    $('mirrorNote').textContent = mirror.error || (mirror.ready ? '' : 'Loading the face…');
+  }
+  engine.addEventListener('features', refreshMirror);
 
   // ── gestures list ──
   const list = $('gestureList');

@@ -322,3 +322,13 @@ header .brand:hover { color: #ffffff; }
 .routing .hint code { font: 11px ui-monospace, Consolas, monospace; color: var(--ink-2); background: var(--s2); padding: 0 4px; border-radius: 2px; }
 .routing .hint { padding-left: 24px; padding-right: 24px; }
 .trow a[data-ext] { color: var(--auto-live); text-decoration: none; }
+
+/* Face › Mirror (src/facemirror.js) */
+.mirror-stage { position: absolute; inset: 0; }
+.mirror-stage canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; cursor: grab; }
+.mirror-note { position: absolute; left: 24px; bottom: 16px; color: var(--ink-3); }
+#mRows .v { display: flex; align-items: center; gap: 8px; }
+#mRows .mbar { width: 120px; height: 4px; background: var(--s2); border-radius: 2px; overflow: hidden; display: inline-block; }
+#mRows .mbar i { display: block; height: 100%; background: var(--auto-live); }
+#mRows .mval { min-width: 72px; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+#mRows .row.dim .mval { color: var(--ink-3); }

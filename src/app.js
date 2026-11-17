@@ -50,7 +50,7 @@ engine.addEventListener('ant', saveConfig);
 engine.addEventListener('face-model', () => { if (!(window.alma.flags || {}).sim && engine.sourceKind !== 'sim') saveConfig(); });   // a simulator model never replaces a real one
 
 // ── Pages ──
-{ const v = (window.alma.flags || {}).view; if (v) { if (['gestures', 'gaze', 'tension'].includes(v)) ui.faceView = v; else ui.liveView = v; } }
+{ const v = (window.alma.flags || {}).view; if (v) { if (['gestures', 'gaze', 'tension', 'mirror'].includes(v)) ui.faceView = v; else ui.liveView = v; } }
 const pages = {
   home: mountHome($('pageHome'), { engine, ui, saveConfig, visitor }),
   live: mountLive($('pageLive'), { engine, ui, saveConfig }),

@@ -28,6 +28,7 @@ const THIRD_PARTY = [
   ['three.js', 'MIT · © 2010–2024 three.js authors', 'The 3D head view.', 'https://threejs.org'],
   ['Lee Perry-Smith head scan', 'CC BY 3.0 · Lee Perry-Smith, Infinite-Realities', 'The 3D head, from the three.js examples.', 'https://threejs.org'],
   ['Geist', 'SIL Open Font License 1.1 · Vercel', 'The typeface.', 'https://vercel.com/font'],
+  ['facecap.glb (Face Cap)', 'licence not stated · Bannaflak', 'The Mirror face (Face › Mirror), from the three.js examples, as PiEEG\u2019s Face Trainer uses it. Internal use until its licence is confirmed.', 'https://www.bannaflak.com/face-cap/'],
 ];
 
 export function mountAbout({ version }) {

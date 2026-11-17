@@ -80,6 +80,15 @@ Every channel is "its electrode minus the reference", so the app splits each one
   layout), a features CSV at 10 Hz and a summary. The Sessions page shows a saved session whole and lays another
   over it.
 
+## 6b. Face › Mirror
+
+A face that does what the mask reads, live: blinks, the trained gestures (wink, brows, frown, jaw, clench, smile,
+pucker), the gaze once calibrated (the irises turn), and where no gesture is trained, the jaw and brow tension. *As a
+mirror* or *as others see you*. It is not a camera: smile and pucker are far from the electrodes and stay weak.
+The same values go out as ARKit blendshapes (`arkit.jawOpen`, `arkit.eyeBlinkLeft`, `arkit.eyeLookOutRight`…), the
+names face rigs use (Unreal Live Link / MetaHuman, Unity, VRChat), to move an avatar anywhere. The face model
+(facecap.glb by Face Cap, as PiEEG's Face Trainer uses it) has no stated licence: internal use until confirmed.
+
 ## 7. Send to other software (Routing)
 
 - Add a destination: **OSC · UDP** (host and port of the receiver), **WebSocket** (the app listens; `127.0.0.1` =

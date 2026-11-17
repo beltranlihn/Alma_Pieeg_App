@@ -4,7 +4,10 @@ Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and 
 face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
 *Soul Charger* VR experience, but meant to send anything to anything: OSC, WebSocket, files.
 
-Status: **0.12.1**: the ten sites placed as on the real PiEEG XR pad (five per side, none on the nose; the "centre" sites are the inner brow discs) and the **Alma prototype** electrode map, measured with a multimeter (Ref on the right outer brow disc, Bias on the lower right temple).
+Status: **0.13**: **Face › Mirror**, a face (Face Cap's facecap.glb, the one PiEEG's Face Trainer uses; licence not
+stated, internal use) that blinks, winks, raises the brows, opens the jaw, smiles and looks where the mask says, live;
+the same values go out as **ARKit blendshapes** (`arkit.*`) to drive any avatar rig.
+**0.12.1**: the ten sites placed as on the real PiEEG XR pad (five per side, none on the nose; the "centre" sites are the inner brow discs) and the **Alma prototype** electrode map, measured with a multimeter (Ref on the right outer brow disc, Bias on the lower right temple).
 **0.12**: everything for shows and installations: **markers and commands in** (OSC / UDP / WebSocket),
 **rules → events** (OSC, WebSocket, MIDI or webhook, with hold and cooldown), a **cue sheet**, **visitor mode**
 (presence, per-visitor baseline, safe outputs, a session per visitor, endless reconnect), **region outputs**, a

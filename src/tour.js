@@ -42,6 +42,8 @@ const STEPS = [
     text: 'Teach it a few face gestures (blink, clench, smile, raise the brows): twice each, then it recognises them live. Each one can be sent out as a trigger.' },
   { page: 'face', view: 'gaze', target: { sel: '#fvGaze' }, title: 'Gaze',
     text: 'Nine dots to calibrate where the eyes look, from the eye muscles near the temples and the forehead: left, right, up and down, as numbers you can send.' },
+  { page: 'face', view: 'mirror', target: { sel: '#fvMirror' }, title: 'Mirror',
+    text: 'A face that does what the mask reads: blinks, trained gestures, the gaze and muscle tension, live. The same values go out as ARKit blendshapes, the language of avatar rigs, to move a face in Unreal, Unity or TouchDesigner.' },
   { page: 'face', view: 'tension', target: { sel: '#fvTension' }, title: 'Tension',
     text: 'Jaw and brow tension 0–1, from muscle activity. Range asks the person to clench and relax, so 1 means their own strongest.' },
   { page: 'sessions', target: { sel: '#ssList' }, title: 'Sessions',

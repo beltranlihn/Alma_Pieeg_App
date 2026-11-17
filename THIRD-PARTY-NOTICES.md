@@ -9,6 +9,7 @@ EEG Alma Center (MIT, © 2026 Alma Digital Studio) ships with or ports from:
 | [three.js](https://threejs.org) | MIT, © 2010–2024 three.js authors (`assets/vendor/LICENSE.three`) | 3D head view |
 | Lee Perry-Smith head scan | CC BY 3.0, Lee Perry-Smith / Infinite-Realities | `assets/models/LeePerrySmith.glb`, from the three.js examples |
 | [Geist](https://vercel.com/font) | SIL Open Font License 1.1, © Vercel | Typeface (`assets/fonts`) |
+| facecap.glb, [Face Cap](https://www.bannaflak.com/face-cap/) by Bannaflak | **Not stated.** Taken from the three.js examples (PiEEG's Face Trainer v2 uses the same file). Internal use only until confirmed with its author | `assets/models/facecap.glb`: the Face › Mirror face (decoded, texture removed) |
 
 PiEEG and PiEEG XR are made by PiEEG. ANT+ is a trademark of Garmin Canada Inc. Their mention does not mean they
 endorse this app.

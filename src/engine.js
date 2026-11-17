@@ -17,6 +17,7 @@ import { Gaze } from './gaze.js';
 import { Tension } from './tension.js';
 import { HeartFromEEG } from './heartest.js';
 import { ReplayDevice } from './replay.js';
+import { ARKIT, arkitWeights } from './arkit.js';
 
 // Which channels are forehead / temples / left / right comes from the montage (montage.js), never fixed numbers.
 import { groups, onMontage } from './montage.js';
@@ -125,6 +126,7 @@ export class Engine extends EventTarget {
       visitor: { present: 0, state: 0, count: 0, elapsed: 0 },
       pieeg: { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0, focus: 0 },   // PiEEG-style 0–1 (compat.js)
       rule: { pulse: 0, count: 0 }, cue: { index: 0 },
+      arkit: Object.fromEntries(ARKIT.map((n) => [n, 0])),   // ARKit blendshapes from what the mask reads (arkit.js)
     };
   }
 
@@ -274,6 +276,7 @@ export class Engine extends EventTarget {
     // face joystick: a dead zone of 0.15, then the rest of the way to ±1
     const dz = (v) => { v = Math.max(-1, Math.min(1, v || 0)); return Math.abs(v) < 0.15 ? 0 : Math.sign(v) * (Math.abs(v) - 0.15) / 0.85; };
     f.joy.x = f.gaze.ready ? dz(f.gaze.x) : 0; f.joy.y = dz(f.tension.brow - f.tension.jaw); f.joy.press = f.faceOn.blink_hard ? 1 : 0;
+    arkitWeights(f, this.gestures.models, f.arkit);
     // spectrum of every channel every 100 ms (two ticks)
     if (!this._fftPhase) this._fftPhase = 0;
     if (++this._fftPhase % 2 === 0) {
