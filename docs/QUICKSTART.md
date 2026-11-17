@@ -78,8 +78,11 @@ Every channel is "its electrode minus the reference", so the app splits each one
 
 ## 7. Send to other software (Routing)
 
-- Add a destination: **OSC · UDP** (host and port of the receiver) or **WebSocket** (the app listens; `127.0.0.1` =
-  this computer, `0.0.0.0` = the network).
+- Add a destination: **OSC · UDP** (host and port of the receiver), **WebSocket** (the app listens; `127.0.0.1` =
+  this computer, `0.0.0.0` = the network) or **MIDI** (a port of this computer; on Windows install loopMIDI for a
+  virtual one; the address is `cc 7` or `note 60`).
+- A WebSocket destination has a **viewer**: open `http://<this computer>:<port>/` in any browser (a phone on the same
+  network too, with `0.0.0.0`) to watch the values live. The link is next to the destination.
 - Add mappings: signal → address, input range → output range, smoothing, int or float, rate.
 - WebSocket clients get one JSON message per tick: `{"t": 1763390000000, "values": {"/alma/calm": 0.42, ...}}`.
 - Browser pages can connect only from this computer (file://, localhost); native clients connect freely.
@@ -87,7 +90,32 @@ Every channel is "its electrode minus the reference", so the app splits each one
 - TouchDesigner: an *OSC In* CHOP on the port of the destination. Unreal: an OSC server on that port.
 
 Some signals: `idx.calm`, `idx.focus`, `rel.alpha`, `blink.pulse`, `cal.score`, `face.<gesture>`, `gaze.side`,
-`tension.jaw`, `heart.bpm`, `contact.ok`, `contact.ref`, `result1`–`result3`. The full list is in the Routing page.
+`tension.jaw`, `heart.bpm`, `contact.ok`, `contact.ref`, `result1`–`result3`; regions (`region.lf.alpha`,
+`region.rt.emg`…, they follow the electrode map); the face joystick (`joy.x` from the gaze, `joy.y` brows up / jaw
+down, `joy.press` a hard blink); `stream.loss`; `marker.pulse`; `visitor.present`; PiEEG-style values
+(`pieeg.alpha`, `pieeg.focus`). The full list is in the Routing page. Ready-made receivers for TouchDesigner, Max,
+Unity, Unreal and Python are in the `receivers` folder.
+
+## 7b. Shows and installations
+
+- **Markers in** (Routing): other software sends OSC to this computer, port 9001: `/alma/mark "scene 2"` drops a
+  marker in the recording (and sends `marker.pulse` out); `/alma/session/start "name"`, `/alma/session/stop`,
+  `/alma/calibrate`, `/alma/cues/start`, `/alma/cues/stop` drive the app. Plain text over UDP is a marker too, and so
+  is `{"mark": "…"}` over any of the app's WebSocket ports. Choose *The network* to accept them from a Quest.
+- **Rules** (Routing): "calm above 0.7 for 5 s → send /lights/fade", with a cooldown. To an OSC address, a WebSocket
+  event, a MIDI note, or an HTTP POST to a webhook (the JSON has the same fields as PiEEG's webhook events).
+- **Cue sheet** (Routing): timed messages from the start of each session (or Run), each fired once and marked.
+- **Visitor mode** (Home): for a piece that runs all day. The app sees the mask go on (contact for 3 s) and off (5 s
+  without); each visitor starts fresh and settles for 30–60 s; meanwhile, and between visitors, every continuous output
+  eases to zero, the middle of its range or its last value. Optionally a session per visitor. Bluetooth keeps
+  reconnecting while the mode is on.
+- **Play a session as if live** (Sessions › Play and export): the open session runs through the whole app at 0.5–2×,
+  looping, with its marks coming back as markers. Rehearse a patch or show a piece without the mask.
+- **BDF export** (Sessions): the 24-bit member of the EDF family, for MNE (`mne.io.read_raw_bdf`), EEGLAB, EDFbrowser
+  and PiEEG Studio; the marks are annotations.
+- **PiEEG compatibility** (Routing): their WebSocket on port 1616 (one frame per sample, their welcome, their
+  `start_record` / `stop_record` / `set_filter`), so their Unity plugin connects to this app unchanged; and the VRChat
+  avatar parameters `EEG_Delta … EEG_Gamma` to 127.0.0.1:9000.
 
 ## 8. What has been tried with the real device
 

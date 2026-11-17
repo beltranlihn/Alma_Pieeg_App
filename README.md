@@ -4,7 +4,14 @@ Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and 
 face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
 *Soul Charger* VR experience, but meant to send anything to anything: OSC, WebSocket, files.
 
-Status: **0.11**: a **guided tour** (Tour in the top bar: 21 steps over every page, the panel outlined and explained;
+Status: **0.12**: everything for shows and installations: **markers and commands in** (OSC / UDP / WebSocket),
+**rules → events** (OSC, WebSocket, MIDI or webhook, with hold and cooldown), a **cue sheet**, **visitor mode**
+(presence, per-visitor baseline, safe outputs, a session per visitor, endless reconnect), **region outputs**, a
+**face joystick**, **MIDI out**, a **remote viewer** served by every WebSocket destination, **replay a session as
+the live source**, **BDF export**, **PiEEG compatibility** (their WebSocket on 1616 for their Unity plugin; VRChat
+parameters; PiEEG-style values) and lost-sample reporting. Face gestures checked line by line against PiEEG's Face
+Trainer v2; "ready" now needs two recordings and the other gestures count as negatives. Receivers in `receivers/`.
+**0.11**: a **guided tour** (Tour in the top bar: 21 steps over every page, the panel outlined and explained;
 offered once on the first run), an **About** box (Alma Digital Studio, contact, not a medical device, where the data
 goes, MIT licence and third-party licences; also `LICENSE` and `THIRD-PARTY-NOTICES.md`), inputs **not connected**
 in the electrode map (a mask with fewer discs: out of the head, the averages and the counts), the 3D head pads placed

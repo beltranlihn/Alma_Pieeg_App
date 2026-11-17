@@ -11,7 +11,7 @@ const STATUS_LABEL = { good: 'good', fair: 'fair', poor: 'poor', railed: 'at the
 const REF_LABEL = { good: 'quiet', noisy: 'noisy', lost: 'lost', flat: 'no signal', wait: '…' };
 const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '', off: '' };
 
-export function mountHome(root, { engine, ui, saveConfig }) {
+export function mountHome(root, { engine, ui, saveConfig, visitor }) {
   root.innerHTML = `
     <section class="home">
       <div class="home-face">
@@ -43,10 +43,20 @@ export function mountHome(root, { engine, ui, saveConfig }) {
         </div>
         <div class="hint">Electrodes (experimental): the pulse of the temple arteries, when the mask presses well. It says a number only when the rhythm is clear; record a session with a strap on too to compare. Auto uses the strap when there is one.</div>
 
+        <h2><span>Visitor mode<span class="count" id="vState"></span></span></h2>
+        <div class="rows">
+          <div class="row"><div class="k">For installations</div><div class="seg-group" id="vOn"><button class="seg" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
+          <div class="row"><div class="k">Settling time</div><div class="seg-group" id="vBase"><button class="seg" data-v="30">30</button><button class="seg" data-v="45">45</button><button class="seg" data-v="60">60 s</button></div></div>
+          <div class="row"><div class="k">Outputs while nobody wears it</div><div class="seg-group" id="vIdle"><button class="seg" data-v="zero">Zero</button><button class="seg" data-v="middle">Middle</button><button class="seg" data-v="hold">Hold</button></div></div>
+          <div class="row"><div class="k">Record each visitor</div><div class="seg-group" id="vRec"><button class="seg" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
+        </div>
+        <div class="hint">The app sees someone put the mask on (contact for 3 s) and take it off (5 s without). Each visitor starts fresh and settles before the outputs go live; until then, and between visitors, outputs ease to the value chosen above. Bluetooth keeps reconnecting on its own.</div>
+
         <h2>Stream</h2>
         <div class="rows">
           <div class="row"><div class="k">Device</div><div class="v" id="hDevice">—</div></div>
           <div class="row"><div class="k">Samples per second</div><div class="v" id="hRate">—</div></div>
+          <div class="row"><div class="k">Lost on Bluetooth</div><div class="v" id="hLoss">—</div></div>
           <div class="row"><div class="k">Packets</div><div class="v" id="hPackets">—</div></div>
           <div class="row"><div class="k">Streaming for</div><div class="v" id="hUptime">—</div></div>
           <div class="row"><div class="k">Sessions folder</div><div class="v"><button class="seg" id="hFolder">Open</button></div></div>
@@ -137,6 +147,9 @@ export function mountHome(root, { engine, ui, saveConfig }) {
     $('hDevice').textContent = engine.deviceName || '—';
     $('hRate').textContent = streaming ? `${engine.features.rate.toFixed(0)} /s` : '—';
     $('hPackets').textContent = streaming ? `${engine.stats.notifications} · ${engine.stats.lastLen} B` : '—';
+    const loss = engine.features.loss;
+    $('hLoss').textContent = !streaming || engine.sourceKind !== 'ble' ? '—' : loss < 0.01 ? 'none' : `${(loss * 100).toFixed(0)} %${loss > 0.05 ? ' · bring the box in line of sight' : ''}`;
+    $('vState').textContent = visitor ? visitor.text : '';
     $('hUptime').textContent = streaming ? fmtDuration((Date.now() - engine.startedAt) / 1000) : '—';
     const he = engine.features.heartEEG;
     $('hEEG').textContent = !streaming ? '—' : he.locked ? `${Math.round(he.bpm)} bpm · confidence ${he.confidence.toFixed(2)}` : `searching · ${he.confidence.toFixed(2)}`;
@@ -147,6 +160,14 @@ export function mountHome(root, { engine, ui, saveConfig }) {
   $('homeSim').addEventListener('click', () => engine.connect('sim'));
   $('homeDisconnect').addEventListener('click', () => engine.disconnect());
   $('hFolder').addEventListener('click', () => window.alma.openSessionsFolder());
+  if (visitor) {
+    const seg = (id, val, fn) => { const g = $(id); g.querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.v === String(val)); b.addEventListener('click', () => { fn(b.dataset.v); g.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); saveConfig && saveConfig(); }); }); };
+    seg('vOn', visitor.cfg.enabled ? 1 : 0, (v) => visitor.configure({ enabled: v === '1' }));
+    seg('vBase', visitor.cfg.baseline, (v) => visitor.configure({ baseline: +v }));
+    seg('vIdle', visitor.cfg.idle, (v) => visitor.configure({ idle: v }));
+    seg('vRec', visitor.cfg.record ? 1 : 0, (v) => visitor.configure({ record: v === '1' }));
+    engine.addEventListener('visitor', () => { $('vState').textContent = visitor.text; });
+  }
   engine.heartSource = ui.heartSource || 'auto';
   const paintSource = () => $('hSource').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === engine.heartSource));
   $('hSource').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { engine.heartSource = b.dataset.v; ui.heartSource = b.dataset.v; saveConfig && saveConfig(); paintSource(); refresh(); }));

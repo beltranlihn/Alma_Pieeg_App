@@ -11,17 +11,29 @@ import { setMontage, montageJSON, onMontage } from './montage.js';
 import { mountCalibration } from './calview.js';
 import { mountTour } from './tour.js';
 import { mountAbout } from './about.js';
+import { Visitor } from './visitor.js';
+import { Rules } from './rules.js';
+import { Cues } from './cues.js';
+import { Inputs } from './inputs.js';
+import { Compat } from './compat.js';
+import { midiInit } from './midi.js';
 
 const $ = (id) => document.getElementById(id);
 const engine = new Engine();
 const router = new Router(engine);
+const visitor = new Visitor(engine); engine.visitor = visitor;          // installations: presence, baseline, safe outputs
+const rules = new Rules(engine, router), cues = new Cues(engine, router);
+const compat = new Compat(engine, router); engine.compat = compat;     // PiEEG WebSocket 1616, VRChat, PiEEG-style values
+const inputs = new Inputs(engine, { cues, compat });                   // markers and commands in
+if ((window.alma.flags || {}).probe) window.almaApp = { router, rules, cues, inputs, compat, visitor };   // the self-test probe reads them
+midiInit();
 const ui = { page: 'home', liveView: 'bands', display: null };
 
 // ── Config (userData/config.json) ──
 let saveTimer = null;
 function saveConfig() {
   clearTimeout(saveTimer); router.syncOutputs();
-  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON(), straps: engine.strapSlots, montage: montageJSON(), face: savedFace() }, null, 2)), 300);
+  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON(), straps: engine.strapSlots, montage: montageJSON(), face: savedFace(), visitor: visitor.toJSON(), rules: rules.toJSON(), cues: cues.toJSON(), inputs: inputs.toJSON(), compat: compat.toJSON() }, null, 2)), 300);
 }
 // The simulator never writes the face model: with --sim the one in the file stays as it is; with the Home
 // Simulator button the engine keeps the person's model aside (savedFaceModel) and gives it back on reconnect.
@@ -32,6 +44,7 @@ function savedFace() {
 const cfg = await window.alma.loadConfig();
 if (cfg && cfg.montage) { const errs = setMontage(cfg.montage); if (errs.length) console.warn('Saved electrode map ignored:', errs.join(' ')); }   // before the face model
 if (cfg) { Object.assign(ui, cfg.ui || {}); if (cfg.filters) Object.assign(engine.filters, cfg.filters); router.fromJSON(cfg.router); if (cfg.straps) engine.strapSlots = { ...cfg.straps }; if (cfg.face && !(window.alma.flags || {}).sim) engine.loadFaceModel(cfg.face); }
+visitor.fromJSON(cfg && cfg.visitor); rules.fromJSON(cfg && cfg.rules); cues.fromJSON(cfg && cfg.cues); inputs.fromJSON(cfg && cfg.inputs); compat.fromJSON(cfg && cfg.compat);
 onMontage(saveConfig);
 engine.addEventListener('ant', saveConfig);
 engine.addEventListener('face-model', () => { if (!(window.alma.flags || {}).sim && engine.sourceKind !== 'sim') saveConfig(); });   // a simulator model never replaces a real one
@@ -39,11 +52,11 @@ engine.addEventListener('face-model', () => { if (!(window.alma.flags || {}).sim
 // ── Pages ──
 { const v = (window.alma.flags || {}).view; if (v) { if (['gestures', 'gaze', 'tension'].includes(v)) ui.faceView = v; else ui.liveView = v; } }
 const pages = {
-  home: mountHome($('pageHome'), { engine, ui, saveConfig }),
+  home: mountHome($('pageHome'), { engine, ui, saveConfig, visitor }),
   live: mountLive($('pageLive'), { engine, ui, saveConfig }),
   face: mountFace($('pageFace'), { engine, ui, saveConfig }),
-  sessions: mountSessions($('pageSessions'), { ui, saveConfig }),
-  routing: mountRouting($('pageRouting'), { engine, router, saveConfig }),
+  sessions: mountSessions($('pageSessions'), { ui, saveConfig, engine }),
+  routing: mountRouting($('pageRouting'), { engine, router, saveConfig, rules, cues, inputs, compat }),
 };
 mountCalibration({ engine, ui, saveConfig, panel: $('calPanel') });
 function show(page) {

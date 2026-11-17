@@ -7,10 +7,15 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const dgram = require('dgram');
-const { encode } = require('./osc-encode.js');
+const os = require('os');
+const { encode, decode } = require('./osc-encode.js');
 const ant = require('./ant.js');
 const { Hub } = require('./ws-server.js');
-const wsHub = new Hub();
+// The remote viewer: any WebSocket destination also serves this page at http://<computer>:<port>/
+let viewerHtml = '';
+try { viewerHtml = fs.readFileSync(path.join(__dirname, 'assets', 'viewer.html'), 'utf8'); } catch (_) { /* no viewer in this build */ }
+const wsHub = new Hub({ onMessage: (port, text) => toPage('ws-message', { port, text }), page: () => viewerHtml || null });
+function toPage(channel, payload) { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); }
 
 let win = null;
 let pendingBleCallback = null;   // Chromium re-emits select-bluetooth-device as devices appear
@@ -99,8 +104,24 @@ ipcMain.handle('list-sessions', async () => {
   return out.sort((a, b) => b.mtime - a.mtime);
 });
 ipcMain.handle('open-sessions-folder', () => shell.openPath(sessionsDir()));
-// links from the About box: only web pages and e-mail, nothing that could run on this computer
-ipcMain.handle('open-external', (_e, url) => { const u = String(url); if (/^https:\/\/[^\s]+$/.test(u) || /^mailto:[^\s]+$/.test(u)) shell.openExternal(u); });
+// links (About, the viewer address): web pages, e-mail, and plain http only to this computer or the local network
+const LOCAL_HTTP = /^http:\/\/(127\.0\.0\.1|localhost|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?\/[^\s]*$/;
+ipcMain.handle('open-external', (_e, url) => { const u = String(url); if (/^https:\/\/[^\s]+$/.test(u) || /^mailto:[^\s]+$/.test(u) || LOCAL_HTTP.test(u)) shell.openExternal(u); });
+// this computer's addresses on the local network (for the viewer link)
+ipcMain.handle('net-addresses', () => Object.values(os.networkInterfaces()).flat().filter((a) => a && a.family === 'IPv4' && !a.internal).map((a) => a.address));
+// a session's raw samples (replay as a live source, BDF export)
+ipcMain.handle('session-raw', async (_e, base) => { try { return await fs.promises.readFile(path.join(sessionsDir(), safeName(base) + '.raw.csv'), 'utf8'); } catch (_) { return null; } });
+// a binary file next to a session (BDF export)
+ipcMain.handle('save-binary', async (_e, base, ext, bytes) => {
+  if (!/^\.[a-z0-9]{1,8}$/i.test(String(ext))) return null;
+  const p = path.join(sessionsDir(), safeName(base) + ext); await fs.promises.writeFile(p, Buffer.from(bytes)); return p;
+});
+// rules: an HTTP POST with a JSON body (webhooks: lights, Home Assistant, IFTTT, a show controller)
+ipcMain.handle('http-post', async (_e, url, body) => {
+  const u = String(url); if (!/^https?:\/\/[^\s]+$/.test(u)) return { ok: false, error: 'not an http(s) address' };
+  try { const r = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(3000) }); return { ok: r.ok, status: r.status }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
 // Sessions page: every saved session that has a summary (0.4 and later), newest first
 ipcMain.handle('sessions-index', async () => {
   const dir = sessionsDir(), out = [];
@@ -148,6 +169,27 @@ ipcMain.on('osc-send', (_e, messages) => {
   }
 });
 ipcMain.handle('osc-stats', () => ({ ...oscStats }));
+
+// ── IPC: inputs (markers and commands in, OSC or plain text over UDP) ────────
+let inSock = null, inKey = '', inState = { listening: false, error: '', host: '', port: 0, received: 0 };
+ipcMain.on('input-sync', (_e, cfg) => {
+  const want = cfg && cfg.enabled ? `${cfg.host || '127.0.0.1'}:${cfg.port | 0}` : '';
+  if (want === inKey) return;
+  if (inSock) { try { inSock.close(); } catch (_) { /* closed */ } inSock = null; }
+  inKey = want; inState = { listening: false, error: '', host: cfg && cfg.host, port: cfg && cfg.port, received: 0 };
+  if (!want) return;
+  const s = dgram.createSocket({ type: 'udp4', reuseAddr: true }); inSock = s;
+  s.on('error', (e) => { inState.error = e.code === 'EADDRINUSE' ? `port ${cfg.port} is taken` : e.message; inState.listening = false; });
+  s.on('listening', () => { inState.listening = true; });
+  s.on('message', (buf, rinfo) => {
+    inState.received++;
+    const from = `${rinfo.address}:${rinfo.port}`, msgs = buf[0] === 0x2f || buf[0] === 0x23 ? decode(buf) : [];   // '/' or '#bundle'
+    if (msgs.length) for (const m of msgs) toPage('input-message', { from, address: m.address, args: m.args });
+    else toPage('input-message', { from, text: buf.toString('utf8', 0, Math.min(buf.length, 2000)).trim() });
+  });
+  try { s.bind(cfg.port | 0, cfg.host || '127.0.0.1'); } catch (e) { inState.error = e.message; }
+});
+ipcMain.handle('input-stats', () => ({ ...inState }));
 
 // ── IPC: WebSocket (JSON to any client that connects) ────────────────────────
 ipcMain.on('ws-sync', (_e, list) => { try { wsHub.sync(Array.isArray(list) ? list : []); } catch (_) { /* reported in stats */ } });

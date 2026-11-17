@@ -16,6 +16,7 @@ import { GestureTrainer, GESTURES, faceFeatures, FEATURE_DIM } from './face.js';
 import { Gaze } from './gaze.js';
 import { Tension } from './tension.js';
 import { HeartFromEEG } from './heartest.js';
+import { ReplayDevice } from './replay.js';
 
 // Which channels are forehead / temples / left / right comes from the montage (montage.js), never fixed numbers.
 import { groups, onMontage } from './montage.js';
@@ -116,6 +117,14 @@ export class Engine extends EventTarget {
       emg: new Float32Array(CHANNELS),
       tension: { jaw: 0, brow: 0, jawOn: 0, browOn: 0 },
       faa: 0, faaNorm: 0.5, betaSurge: 0,
+      // regions (follow the electrode map): relative band power and muscle per side of forehead and temples
+      region: Object.fromEntries(['lf', 'rf', 'lt', 'rt'].map((r) => [r, { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0, emg: 0 }])),
+      joy: { x: 0, y: 0, press: 0 },                  // face joystick: gaze left/right, brows up (+) / jaw (−), hard blink
+      loss: 0,                                        // share of samples missing (Bluetooth), smoothed over ~3 s
+      marker: { pulse: 0, count: 0 },                 // markers that came in (OSC, UDP, WebSocket, replay)
+      visitor: { present: 0, state: 0, count: 0, elapsed: 0 },
+      pieeg: { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0, focus: 0 },   // PiEEG-style 0–1 (compat.js)
+      rule: { pulse: 0, count: 0 }, cue: { index: 0 },
     };
   }
 
@@ -132,10 +141,13 @@ export class Engine extends EventTarget {
   _setState(state, text) { this.state = state; if (text) this.statusText = text; this._emit('state'); }
   _emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
 
-  async connect(kind = 'ble') {
+  /** kind: 'ble' (the PiEEG) · 'sim' (the simulator) · 'replay' (a saved session; opts = { base, text, speed, label }) */
+  async connect(kind = 'ble', opts = {}) {
     if (this.device) await this.disconnect();
     if (kind === 'ble' && !PiEEGDevice.supported()) { this._setState('error', 'Web Bluetooth is not available in this window'); return false; }
-    const dev = kind === 'ble' ? new PiEEGDevice() : new SimDevice();
+    const dev = kind === 'ble' ? new PiEEGDevice() : kind === 'replay' ? new ReplayDevice(opts) : new SimDevice();
+    if (kind === 'replay') dev.onMark = (text) => this.markIn(text, 'replay');
+    if (this.visitor && this.visitor.cfg.enabled && 'maxReconnects' in dev) dev.maxReconnects = Infinity;   // an installation keeps trying
     this.device = dev;
     dev.onStatus = (t) => { this.statusText = t; this._emit('state'); };
     dev.onReconnected = () => { this.statusText = `${dev.name} · streaming`; this._emit('state'); };
@@ -149,7 +161,7 @@ export class Engine extends EventTarget {
     this.sourceKind = kind; this.gestures.resetLive();
     this.tension.reset(); this.heartEEG.reset(); this.faaNorm.reset(); this._faa = { l: 0, r: 0, n: 0 }; this._beta = { ema: 0, base: 0, n: 0 }; this.faceReady = false;
     this.features = this._emptyFeatures(); this.quality = null;
-    this._setState('connecting', kind === 'ble' ? 'Scanning for PiEEG…' : 'Starting simulator…');
+    this._setState('connecting', kind === 'ble' ? 'Scanning for PiEEG…' : kind === 'replay' ? 'Starting replay…' : 'Starting simulator…');
     try {
       await dev.start((samples, arrival) => this._onSamples(samples, arrival));
     } catch (e) {
@@ -230,6 +242,7 @@ export class Engine extends EventTarget {
       }
       this.rings.push(raw, this._filtTmp, this._wideTmp);
       this.recorder.push(stamps[s], raw);
+      if (this.rawTap) this.rawTap(stamps[s], raw);             // PiEEG-compatible WebSocket (compat.js)
     }
     this._rate.samples += samples.length;
     this._lastSampleAt = performance.now();
@@ -242,6 +255,7 @@ export class Engine extends EventTarget {
     const calPhase = this.calib.tick(now); if (calPhase) this._onCalPhase(calPhase);
     if (this.blink.poll(r, now)) this._emit('blink', { count: this.blink.count, amplitude: this.blink.amplitude });
     f.blinkCount = this.blink.count; f.blinkPulse = this.blink.pulse(now); f.blinkAmp = this.blink.amplitude;
+    if (f.marker.pulse && now > this._markerEnd) f.marker.pulse = 0;
     for (let ch = 0; ch < CHANNELS; ch++) { f.rms[ch] = rms(r, ch, this.fs); f.env[ch] = envelope(r, ch, this.fs); f.emg[ch] = this.emgEnv[ch].value; }
     const bad = this.quality ? this.quality.map(isBad) : null;
     // face: gesture probabilities (20 Hz) and gaze (20 Hz)
@@ -257,6 +271,9 @@ export class Engine extends EventTarget {
     if (gz) { if (gz.done && this.recorder.active) this.mark('gaze_done'); this._emit('gaze', gz.done ? { type: 'done', ok: gz.ok } : { type: 'phase', ...gz }); if (gz.done) this._emit('face-model'); }
     if (this.gaze.side !== f.gaze.side) this._emit('gaze', { type: 'side', side: this.gaze.side });
     f.gaze.x = this.gaze.x; f.gaze.y = this.gaze.y; f.gaze.side = this.gaze.side; f.gaze.ready = this.gaze.ready ? 1 : 0;
+    // face joystick: a dead zone of 0.15, then the rest of the way to ±1
+    const dz = (v) => { v = Math.max(-1, Math.min(1, v || 0)); return Math.abs(v) < 0.15 ? 0 : Math.sign(v) * (Math.abs(v) - 0.15) / 0.85; };
+    f.joy.x = f.gaze.ready ? dz(f.gaze.x) : 0; f.joy.y = dz(f.tension.brow - f.tension.jaw); f.joy.press = f.faceOn.blink_hard ? 1 : 0;
     // spectrum of every channel every 100 ms (two ticks)
     if (!this._fftPhase) this._fftPhase = 0;
     if (++this._fftPhase % 2 === 0) {
@@ -278,6 +295,14 @@ export class Engine extends EventTarget {
       if (used) { for (const b of BANDS) avg[b.id] /= used; avg.total /= used; avg.dominant /= used; }
       f.avg = avg;
       for (const b of BANDS) f.rel[b.id] = avg.total > 0 ? avg[b.id] / avg.total : 0;
+      // regions: the channels of each side of forehead and temples that have contact
+      for (const [key, chs] of [['lf', groups.leftForehead], ['rf', groups.rightForehead], ['lt', groups.leftTemples], ['rt', groups.rightTemples]]) {
+        const reg = f.region[key], use = chs.filter((ch) => !bad || !bad[ch]); let tot = 0, emg = 0;
+        for (const b of BANDS) reg[b.id] = 0;
+        for (const ch of use) { for (const b of BANDS) reg[b.id] += f.bands[ch][b.id]; tot += f.bands[ch].total; emg += f.emg[ch]; }
+        for (const b of BANDS) reg[b.id] = tot > 0 ? reg[b.id] / tot : 0;
+        reg.emg = use.length ? emg / use.length : 0;
+      }
       const raw = rawIndices(avg);
       for (const i of INDICES) {
         const prev = f.idx[i.id] || raw[i.id];
@@ -360,6 +385,7 @@ export class Engine extends EventTarget {
     const now = performance.now(), dt = (now - this._rate.t0) / 1000;
     if (dt >= 1) { this._rate.value = this._rate.samples / dt; this._rate.samples = 0; this._rate.t0 = now; }
     this.features.rate = this._rate.value;
+    if (this.sourceKind === 'ble' && this._rate.value > 0) this.features.loss += (Math.max(0, 1 - this._rate.value / this.fs) - this.features.loss) * 0.1;
     this._emit('quality');
   }
 
@@ -426,6 +452,20 @@ export class Engine extends EventTarget {
     try { paths = await window.alma.saveFiles(name, files); } catch (e) { this._emit('error', e); }
     this._emit('session'); this._emit('saved', { name, path: paths[0] || '', paths });
     return { name, paths, summary };
+  }
+
+  /** A marker from outside (OSC, UDP, WebSocket, a replayed session): a pulse out, and a mark if recording. */
+  markIn(text, from = '') {
+    const f = this.features; f.marker.count++; f.marker.pulse = 1; this._markerEnd = performance.now() + 150;
+    if (this.recorder.active) this.mark(String(text).slice(0, 120));
+    this._emit('marker', { text, from });
+  }
+  /** Visitor mode: a new person, so what was learnt from the last one goes (models and calibration stay). */
+  resetForVisitor() {
+    for (const n of Object.values(this.norms)) n.reset();
+    this.blink.reset(); this.faaNorm.reset(); this._faa = { l: 0, r: 0, n: 0 }; this._beta = { ema: 0, base: 0, n: 0 };
+    this.heartEEG.reset(); this.tension.reset(); this.gestures.resetLive(); if (this.compat) this.compat.reset();
+    this.features.blinkCount = 0;
   }
 
   // ── Recording ──────────────────────────────────────────────────────────────

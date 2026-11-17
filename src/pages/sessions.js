@@ -2,6 +2,7 @@
 // 10 Hz as lines, the marks, the results and per-signal numbers from the summary), and lay a second session
 // over it to compare. Reads the files in Documents / EEG Alma Center / sessions; nothing here writes.
 import { SIGNAL_BY_ID } from '../signals.js';
+import { rawCsvToBDF } from '../bdf.js';
 import { METHOD_BY_ID } from '../session.js';
 import { signalColor } from '../colors.js';
 
@@ -31,7 +32,7 @@ function labelOf(col) { const s = signalOfColumn(col); if (!s) return col; const
 const fmtClock = (sec) => { const m = Math.floor(sec / 60), r = Math.floor(sec % 60); return `${m}:${String(r).padStart(2, '0')}`; };
 const fmtDate = (iso) => { const d = new Date(iso); if (isNaN(d)) return ''; const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
-export function mountSessions(root, { ui, saveConfig }) {
+export function mountSessions(root, { ui, saveConfig, engine }) {
   root.innerHTML = `
     <section class="live sessions">
       <div class="live-main">
@@ -51,6 +52,12 @@ export function mountSessions(root, { ui, saveConfig }) {
         <h2>Compare</h2>
         <div class="rows"><div class="row"><div class="k">Lay over</div><select id="ssCompare" style="width:200px"></select></div></div>
         <div class="hint">The second session is drawn dashed, from its own start.</div>
+        <h2>Play and export</h2>
+        <div class="rows">
+          <div class="row"><div class="k">Play as if live</div><div class="v"><span class="seg-group" id="ssSpeed"><button class="seg" data-v="0.5">0.5×</button><button class="seg on" data-v="1">1×</button><button class="seg" data-v="2">2×</button></span> <button class="seg" id="ssPlay">Play</button></div></div>
+          <div class="row"><div class="k">BDF (EDF family, 24-bit)</div><div class="v"><button class="seg" id="ssBdf">Export</button></div></div>
+        </div>
+        <div class="hint" id="ssPlayHint">Play runs the open session through the whole app (contact, detectors, rules, routing) as if the mask were on, looping, with its marks coming back as markers: rehearse a piece without the mask. BDF opens in MNE, EEGLAB, EDFbrowser and PiEEG Studio.</div>
       </aside>
     </section>`;
   const $ = (id) => root.querySelector('#' + id);
@@ -101,6 +108,31 @@ export function mountSessions(root, { ui, saveConfig }) {
     otherData = other ? await load(other.base) : null; render();
   });
   $('ssReload').addEventListener('click', () => { cache.clear(); refreshIndex(); });
+  let speed = 1;
+  $('ssSpeed').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { speed = +b.dataset.v; $('ssSpeed').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); }));
+  const say = (t) => { $('ssPlayHint').textContent = t; };
+  const playing = () => engine && engine.sourceKind === 'replay' && engine.device;
+  const paintPlay = () => { $('ssPlay').textContent = playing() ? 'Stop' : 'Play'; };
+  if (engine) engine.addEventListener('state', paintPlay);
+  $('ssPlay').addEventListener('click', async () => {
+    if (!engine) return;
+    if (playing()) { await engine.disconnect(); paintPlay(); return; }
+    if (!current) { say('Open a session first.'); return; }
+    say('Reading the raw samples…');
+    const text = await window.alma.sessionRaw(current.base);
+    if (!text) { say('This session has no raw file to play.'); return; }
+    const ok = await engine.connect('replay', { base: current.base, text, speed, label: current.participant || current.base });
+    say(ok ? `Playing ${current.participant || current.base} at ${speed}× as the live source. Stop here or on Home.` : engine.statusText); paintPlay();
+  });
+  $('ssBdf').addEventListener('click', async () => {
+    if (!current) { say('Open a session first.'); return; }
+    say('Building the BDF…');
+    const text = await window.alma.sessionRaw(current.base);
+    if (!text) { say('This session has no raw file.'); return; }
+    const bytes = rawCsvToBDF(text, { participant: current.participant || '' });
+    const p = await window.alma.saveBinary(current.base, '.bdf', bytes);
+    say(p ? `Saved ${p.split(/[\x5c/]/).pop()} (${(bytes.length / 1e6).toFixed(1)} MB) next to the session.` : 'Could not save the file.');
+  });
   $('ssFolder').addEventListener('click', () => (current ? window.alma.revealSession(current.base) : window.alma.openSessionsFolder()));
 
   function render() {

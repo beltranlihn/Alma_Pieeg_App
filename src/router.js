@@ -1,8 +1,12 @@
 // The router: destinations × mappings, evaluated from the engine's features and sent through the host at each
 // destination's rate. Events (blink pulse, contact flips) go out at once.
-// A destination is OSC (UDP to host:port, one message per address) or WebSocket (the app listens on
-// host:port, every client gets one JSON frame per tick: {"t": ms, "values": {address: value}}).
+// A destination is OSC (UDP to host:port, one message per address), WebSocket (the app listens on
+// host:port, every client gets one JSON frame per tick: {"t": ms, "values": {address: value}}) or MIDI (a port of
+// this computer: host = the port's name, port = the channel 1–16, address = "cc 7" or "note 60").
+// In visitor mode, while nobody wears the mask (or a visitor is still settling), continuous outputs ease to a safe
+// value instead of following noise: 0, the middle of their range, or the last value.
 import { SIGNAL_BY_ID } from './signals.js';
+import { midiSend, midiMessage, midiPulse, to7bit } from './midi.js';
 
 let nextId = 1;
 export const uid = () => `${Date.now().toString(36)}${(nextId++).toString(36)}`;
@@ -17,6 +21,8 @@ export class Router {
     this._last = new Map();     // destination id → when the next send is due
     this._smooth = new Map();   // mapping id → smoothed value
     this._lastEvent = new Map();
+    this._midiLast = new Map();  // mapping id → last 7-bit value sent
+    this.extraListeners = [];   // WebSocket listeners other parts open (PiEEG compatibility)
     this.sent = 0;
     engine.addEventListener('features', () => this._tick());
   }
@@ -27,7 +33,11 @@ export class Router {
   }
   removeDestination(id) { this.destinations = this.destinations.filter((d) => d.id !== id); this.mappings = this.mappings.filter((m) => m.destination !== id); this.syncOutputs(); }
   /** Open the WebSocket listeners of the enabled WebSocket destinations, close the rest. */
-  syncOutputs() { if (typeof window !== 'undefined' && window.alma && window.alma.wsSync) window.alma.wsSync(this.enabled ? this.destinations.filter((d) => d.kind === 'ws' && d.enabled).map((d) => ({ host: d.host, port: d.port })) : []); }
+  syncOutputs() {
+    if (typeof window === 'undefined' || !window.alma || !window.alma.wsSync) return;
+    const mine = this.enabled ? this.destinations.filter((d) => d.kind === 'ws' && d.enabled).map((d) => ({ host: d.host, port: d.port })) : [];
+    window.alma.wsSync([...mine, ...this.extraListeners]);
+  }
   addMapping(m = {}) {
     const sig = SIGNAL_BY_ID[m.signal || 'calm'];
     const map = { id: uid(), signal: 'calm', address: '/alma/calm', destination: this.destinations[0]?.id || null, type: 'f',
@@ -78,14 +88,22 @@ export class Router {
     this.syncOutputs();
   }
 
-  /** The value a mapping would send now (after range, clamp and smoothing). */
-  evaluate(m, f) {
+  /** The value a mapping would send now (after range, clamp and smoothing). idle: the visitor-mode policy or null. */
+  evaluate(m, f, idle = null) {
     const sig = SIGNAL_BY_ID[m.signal]; if (!sig) return 0;
-    const raw = sig.get(f);
-    const span = (m.inMax - m.inMin) || 1;
-    let v = (raw - m.inMin) / span;
-    v = Math.max(0, Math.min(1, v));
-    v = m.outMin + v * (m.outMax - m.outMin);
+    let v;
+    if (idle && sig.kind === 'event') v = m.outMin;
+    else if (idle) {                                   // ease to the safe value, a little slower than the mapping's own smoothing
+      const prev = this._smooth.has(m.id) ? this._smooth.get(m.id) : m.outMin;
+      const target = idle === 'hold' ? prev : idle === 'middle' ? (m.outMin + m.outMax) / 2 : m.outMin;
+      const s = prev + (target - prev) * 0.08; this._smooth.set(m.id, s); return s;
+    } else {
+      const raw = sig.get(f);
+      const span = (m.inMax - m.inMin) || 1;
+      v = (raw - m.inMin) / span;
+      v = Math.max(0, Math.min(1, v));
+      v = m.outMin + v * (m.outMax - m.outMin);
+    }
     if (sig.kind === 'event' || !(m.smooth > 0)) { this._smooth.set(m.id, v); return v; }
     const prev = this._smooth.has(m.id) ? this._smooth.get(m.id) : v;
     const s = prev + (v - prev) * (1 - Math.min(0.95, m.smooth));
@@ -93,8 +111,8 @@ export class Router {
   }
 
   _tick(now = performance.now()) {
-    const f = this.engine.features;
-    if (!this.enabled || this.engine.state !== 'streaming') { for (const m of this.mappings) this.live.set(m.id, this.evaluate(m, f)); return; }
+    const f = this.engine.features, idle = this.engine.visitor ? this.engine.visitor.idlePolicy() : null;
+    if (!this.enabled || this.engine.state !== 'streaming') { for (const m of this.mappings) this.live.set(m.id, this.evaluate(m, f, idle)); return; }
     const batch = [], wsBatch = [];
     for (const d of this.destinations) {
       if (!d.enabled) continue;
@@ -103,12 +121,17 @@ export class Router {
       const values = {}; let any = false;
       for (const m of this.mappings) {
         if (!m.enabled || m.destination !== d.id) continue;
-        let v = this.evaluate(m, f); this.live.set(m.id, v);
+        let v = this.evaluate(m, f, idle); this.live.set(m.id, v);
         if (m.type === 'i') v = Math.round(v);
         const sig = SIGNAL_BY_ID[m.signal];
         let send = due;
         if (sig.kind === 'event') { const prev = this._lastEvent.get(m.id); if (prev !== v) { send = true; this._lastEvent.set(m.id, v); } }
         if (!send) continue;
+        if (d.kind === 'midi') {
+          const v7 = to7bit(v, m.outMax), bytes = midiMessage(m.address, v7, d.port, this._midiLast.get(m.id));
+          if (bytes && midiSend(d.host, bytes)) { this._midiLast.set(m.id, v7); this.sent++; }
+          continue;
+        }
         if (d.kind === 'ws') { values[m.address] = m.type === 'i' ? v : +v.toFixed(5); any = true; }
         else batch.push({ host: d.host, port: d.port, address: m.address, args: [{ type: m.type === 'i' ? 'i' : 'f', value: v }] });
       }
@@ -119,8 +142,19 @@ export class Router {
     if (wsBatch.length && window.alma.wsSend) { window.alma.wsSend(wsBatch); this.sent += wsBatch.length; }
   }
 
+  /** One message to one destination, outside the mappings (rules, cues, markers): OSC float, WebSocket JSON
+   *  {"t", "values": {address: value}, ...extra}, or a MIDI trigger. */
+  sendTo(destId, address, value = 1, extra = null) {
+    const d = this.destinations.find((x) => x.id === destId); if (!d || !d.enabled) return false;
+    if (d.kind === 'midi') return midiPulse(d.host, address, d.port);
+    if (d.kind === 'ws') window.alma.wsSend?.([{ host: d.host, port: d.port, text: JSON.stringify({ t: Date.now(), values: { [address]: value }, ...(extra || {}) }) }]);
+    else window.alma.oscSend([{ host: d.host, port: d.port, address, args: [{ type: 'f', value }] }]);
+    this.sent++; return true;
+  }
+
   /** Send one test value to a destination so the receiver can confirm the path. */
   test(dest, address = '/alma/test', value = 1) {
+    if (dest.kind === 'midi') { midiPulse(dest.host, 'note 60', dest.port); return; }
     if (dest.kind === 'ws') window.alma.wsSend?.([{ host: dest.host, port: dest.port, text: JSON.stringify({ t: Date.now(), values: { [address]: value } }) }]);
     else window.alma.oscSend([{ host: dest.host, port: dest.port, address, args: [{ type: 'f', value }] }]);
   }

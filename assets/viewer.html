@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EEG Alma Center · viewer</title>
+<style>
+  :root { color-scheme: dark; --bg: #111111; --s1: #1b1b1b; --s2: #262626; --ink: #e0e0e0; --ink2: #b8b8b8; --ink3: #8c8c8c; --line: rgba(255,255,255,0.10); --on: #4a8d6f; --accent: #4fc3e8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--s1); position: sticky; top: 0; }
+  header b { font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #6d6d6d; flex: none; }
+  .dot.on { background: var(--on); }
+  #status { color: var(--ink3); margin-left: auto; font-variant-numeric: tabular-nums; }
+  main { padding: 8px 16px 32px; max-width: 760px; margin: 0 auto; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 40% 70px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .bar { height: 6px; background: var(--s2); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
+  .val { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--ink3); padding: 32px 0; text-align: center; }
+  .note { color: var(--ink3); font-size: 11px; padding-top: 16px; }
+</style>
+</head>
+<body>
+<header><div class="dot" id="dot"></div><b>EEG Alma Center</b><span>· live values</span><span id="status">connecting…</span></header>
+<main><div id="rows"><div class="empty">Waiting for values…</div></div>
+<div class="note">Read only. The bars scale each value against the range it has shown so far. Not a medical device.</div></main>
+<script>
+  // Shows what this WebSocket port sends: {"t", "values": {address: value}} (the app's mappings) or PiEEG-style
+  // frames {"t", "n", "channels": [...]} (the PiEEG compatibility port).
+  const rowsEl = document.getElementById('rows'), statusEl = document.getElementById('status'), dot = document.getElementById('dot');
+  const rows = new Map(), range = new Map();
+  let frames = 0, lastT = performance.now();
+  function row(key) {
+    let r = rows.get(key); if (r) return r;
+    if (!rows.size) rowsEl.innerHTML = '';
+    const el = document.createElement('div'); el.className = 'row';
+    el.innerHTML = '<div class="name"></div><div class="bar"><i></i></div><div class="val"></div>';
+    el.querySelector('.name').textContent = key; rowsEl.appendChild(el);
+    r = { fill: el.querySelector('i'), val: el.querySelector('.val') }; rows.set(key, r); return r;
+  }
+  function show(key, v) {
+    if (typeof v !== 'number' || !isFinite(v)) return;
+    const g = range.get(key) || { lo: Math.min(0, v), hi: Math.max(1, v) }; g.lo = Math.min(g.lo, v); g.hi = Math.max(g.hi, v); range.set(key, g);
+    const r = row(key), pct = (v - g.lo) / ((g.hi - g.lo) || 1);
+    r.fill.style.width = (Math.max(0, Math.min(1, pct)) * 100).toFixed(1) + '%';
+    r.val.textContent = Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(3);
+  }
+  function connect() {
+    const ws = new WebSocket(`ws://${location.host}`);
+    ws.onopen = () => { dot.classList.add('on'); statusEl.textContent = 'connected'; };
+    ws.onclose = () => { dot.classList.remove('on'); statusEl.textContent = 'disconnected · retrying'; setTimeout(connect, 2000); };
+    ws.onmessage = (e) => {
+      let j; try { j = JSON.parse(e.data); } catch (_) { return; }
+      frames++;
+      if (j.values) for (const [k, v] of Object.entries(j.values)) show(k, v);
+      else if (Array.isArray(j.channels)) j.channels.forEach((v, i) => show(`ch${i + 1} (µV)`, v));
+    };
+  }
+  setInterval(() => { const now = performance.now(), hz = frames / ((now - lastT) / 1000); frames = 0; lastT = now; if (dot.classList.contains('on')) statusEl.textContent = `connected · ${hz.toFixed(0)} msg/s`; }, 1000);
+  connect();
+</script>
+</body>
+</html>

@@ -11,6 +11,11 @@
 //     the next ones 1. Rest samples are negatives, the gesture (ramps included) positives;
 //   • readiness = balanced accuracy, leaving one CYCLE out at a time (PiEEG leaves one recording out; a cycle is
 //     the same idea with more folds, and still never splits samples that are next to each other in time).
+// Checked against PiEEG's v2 source on 2026-11-17: same features, same model and optimiser, same 3-2-1 protocol and
+// the same labels (rest after 0.4 s is negative, the final rest after 0.2 s, ramps and hold positive). Two things
+// added on top: (1) a gesture says "ready" only after two recordings, as PiEEG gates on two reps (with one, the
+// cross-validation only compares cycles of the same minute and reads too high); (2) the other gestures recorded in
+// this run are negatives too, so "clench" learns not to fire on "smile" (PiEEG trains each one against rest only).
 // Differences: the features read a wide-band copy of the signal (1 Hz–Nyquist, mains notched) instead of the
 // 1–40 Hz display trace, because smiles and clenches live above 40 Hz; the probabilities are smoothed (EMA 0.25)
 // and turned into on/off events with hysteresis for OSC.
@@ -162,7 +167,8 @@ export function predictProb(d, x) {
   return sigmoid(z);
 }
 
-export function readiness(cv) { return cv >= 0.85 ? 'ready' : cv >= 0.7 ? 'improving' : 'weak'; }
+/** ready ≥ 0.85, improving ≥ 0.7, else weak; with fewer than two recordings it is never "ready" yet. */
+export function readiness(cv, recordings = 2) { if (recordings < 2) return 'record again'; return cv >= 0.85 ? 'ready' : cv >= 0.7 ? 'improving' : 'weak'; }
 
 // ── the 3-2-1 recording protocol (PiEEG face-trainer-v2/prompts-v2.ts) ─────
 export const TIMING = { getReady: 1, rest: 2.0, rampUp: 0.5, hold: 2.0, rampDown: 0.5, restFinal: 1.0 };
@@ -245,12 +251,26 @@ export class GestureTrainer {
       units.push({ X, y: Uint8Array.from(u.ys), n: u.rows.length });
     }
     this.recordings[r.id] = r.k;
-    this.refit(r.id);
+    // every gesture with recordings this run learns again: the new one brings negatives for the others
+    for (const id of Object.keys(this.units)) this.refit(id);
+  }
+
+  /** The gesture's own cycles, plus one unit of negatives: the moments of the other gestures this run. */
+  _unitsFor(id) {
+    const own = this.units[id] || []; if (!own.length) return own;
+    const rows = [];
+    for (const [other, us] of Object.entries(this.units)) {
+      if (other === id) continue;
+      for (const u of us) for (let n = 0; n < u.n; n++) if (u.y[n]) rows.push(u.X.subarray(n * FEATURE_DIM, (n + 1) * FEATURE_DIM));
+    }
+    if (!rows.length) return own;
+    const X = new Float32Array(rows.length * FEATURE_DIM); rows.forEach((row, n) => X.set(row, n * FEATURE_DIM));
+    return [...own, { X, y: new Uint8Array(rows.length), n: rows.length, others: true }];   // a fold needs both classes: this unit trains, never tests
   }
 
   refit(id) {
-    const d = fitDetector(this.units[id] || []);
-    if (d) this.models[id] = { ...d, recordings: this.recordings[id] || 0, cycles: (this.units[id] || []).length, trainedAt: Date.now() };
+    const d = fitDetector(this._unitsFor(id));
+    if (d) this.models[id] = { ...d, recordings: this.recordings[id] || 0, cycles: (this.units[id] || []).length, againstOthers: this._unitsFor(id).some((u) => u.others), trainedAt: Date.now() };
     return this.models[id] || null;
   }
 

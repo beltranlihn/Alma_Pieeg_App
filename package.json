@@ -1,7 +1,7 @@
 {
   "name": "eeg-alma-center",
   "productName": "EEG Alma Center",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "EEG Alma Center — receive, clean, calibrate, visualize and route biosignals (PiEEG XR first) · Alma Digital Studio",
   "author": "Alma Digital Studio",
   "license": "MIT",

@@ -52,6 +52,27 @@ add('contact.good', 'Contact · channels good', 'Contact', 'n', [0, CHANNELS], (
 add('contact.ref', 'Contact · reference quiet (1/0)', 'Contact', '0/1', [0, 1], (f) => f.refOk, 'event');
 add('contact.common', 'Contact · signal common to all channels (reference noise)', 'Contact', 'µV', [0, 100], (f) => f.refCommon);
 add('stream.rate', 'Stream · samples per second', 'Contact', '/s', [0, 300], (f) => f.rate);
+add('stream.loss', 'Stream · share of samples lost on Bluetooth (0–1)', 'Contact', '0–1', [0, 1], (f) => f.loss);
+// regions: follow the electrode map, leave out channels without contact
+const REGIONS = [['lf', 'Left forehead'], ['rf', 'Right forehead'], ['lt', 'Left temples'], ['rt', 'Right temples']];
+for (const [r, name] of REGIONS) {
+  for (const b of BANDS) add(`region.${r}.${b.id}`, `${name} · ${b.label} relative power`, 'Regions', '0–1', [0, 1], (f) => f.region[r][b.id]);
+  add(`region.${r}.emg`, `${name} · muscle (above 20 Hz)`, 'Regions', 'µV', [0, 50], (f) => f.region[r].emg);
+}
+add('joy.x', 'Face joystick · x: gaze left −1 … right 1 (dead zone 0.15)', 'Face · joystick', '−1…1', [-1, 1], (f) => f.joy.x);
+add('joy.y', 'Face joystick · y: brows up +1 … jaw clench −1', 'Face · joystick', '−1…1', [-1, 1], (f) => f.joy.y);
+add('joy.press', 'Face joystick · press: hard blink (train Blink hard in Face)', 'Face · joystick', '0/1', [0, 1], (f) => f.joy.press, 'event');
+add('marker.pulse', 'Marker in · pulse (1 for 150 ms when a marker arrives)', 'Markers, rules, cues', '0/1', [0, 1], (f) => f.marker.pulse, 'event');
+add('marker.count', 'Marker in · count', 'Markers, rules, cues', 'n', [0, 1000], (f) => f.marker.count, 'event');
+add('rule.pulse', 'Rules · pulse when any rule fires', 'Markers, rules, cues', '0/1', [0, 1], (f) => f.rule.pulse, 'event');
+add('rule.count', 'Rules · times fired', 'Markers, rules, cues', 'n', [0, 1000], (f) => f.rule.count, 'event');
+add('cue.index', 'Cue sheet · cues fired so far', 'Markers, rules, cues', 'n', [0, 100], (f) => f.cue.index, 'event');
+add('visitor.present', 'Visitor · someone wears the mask (1/0)', 'Visitor mode', '0/1', [0, 1], (f) => f.visitor.present, 'event');
+add('visitor.state', 'Visitor · 0 waiting · 1 settling (baseline) · 2 live', 'Visitor mode', '0/1/2', [0, 2], (f) => f.visitor.state, 'event');
+add('visitor.count', 'Visitor · visitors so far', 'Visitor mode', 'n', [0, 1000], (f) => f.visitor.count, 'event');
+add('visitor.elapsed', 'Visitor · seconds since this visitor put the mask on', 'Visitor mode', 's', [0, 900], (f) => f.visitor.elapsed);
+for (const b of BANDS) add(`pieeg.${b.id}`, `${b.label} · PiEEG style (forehead power over its 10 s maximum, 0–1)`, 'PiEEG style (Unity, VRChat)', '0–1', [0, 1], (f) => f.pieeg[b.id]);
+add('pieeg.focus', 'Focus ratio β / (α + θ) · PiEEG style (over its 10 s maximum, 0–1)', 'PiEEG style (Unity, VRChat)', '0–1', [0, 1], (f) => f.pieeg.focus);
 for (let ch = 0; ch < CHANNELS; ch++) {
   const e = XR_FACE[ch];
   add(`ch${ch + 1}.rms`, `${e.id} · rms (1 s) · ${e.place}`, 'Per channel · amplitude', 'µV', [0, 100], (f) => f.rms[ch]);

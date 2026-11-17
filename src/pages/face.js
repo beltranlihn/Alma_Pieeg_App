@@ -10,7 +10,7 @@ import { XR_FACE } from '../scope.js';
 import { GAZE_COLOR, TENSION_COLOR, FACE_COLOR } from '../colors.js';
 import { cues } from '../tones.js';
 
-const READY_COLOR = { ready: 'var(--toggle-on)', improving: 'var(--auto-ovr)', weak: 'var(--danger)' };
+const READY_COLOR = { ready: 'var(--toggle-on)', improving: 'var(--auto-ovr)', weak: 'var(--danger)', 'record again': 'var(--ink-3)' };
 import { groups, onMontage } from '../montage.js';
 // left temple · left forehead · right forehead · right temple, as the montage says
 const elecGroups = () => [groups.leftTemples, groups.leftForehead, groups.rightForehead, groups.rightTemples].filter((g) => g.length);
@@ -114,7 +114,7 @@ export function mountFace(root, { engine, ui, saveConfig }) {
       const score = row.querySelector('.g-score'), fill = row.querySelector('.g-ready .meter-fill');
       if (m) {
         trained++;
-        const tier = readiness(m.cv);
+        const tier = readiness(m.cv, m.recordings);
         fill.style.width = `${(Math.max(0, (m.cv - 0.5) / 0.5) * 100).toFixed(0)}%`; fill.style.background = READY_COLOR[tier];
         score.innerHTML = `<b>${m.cv.toFixed(2)}</b> ${tier} · ${m.cycles} cycles`;
       } else { fill.style.width = '0%'; score.textContent = busyHere ? 'recording' : (tr.units[g.id] || []).length ? 'needs one more' : 'not trained'; }

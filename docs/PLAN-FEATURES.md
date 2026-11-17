@@ -1,5 +1,12 @@
 # EEG Alma Center · feature plan (2026-11-17)
 
+**Status after 0.12 (2026-11-17):** done: 0.1–0.5, 1.1–1.5, 2.2–2.5 (EDF as BDF+, 24-bit), 3.1, 3.2. Not done:
+0.6 (blink check: needs a recording with every blink marked, press M on each), 1.6 (needs a session with a strap and
+the mask together), 2.1 LSL (needs liblsl, a native library: a download to approve), 3.3 P300 and 3.4 mental commands
+(forehead dry electrodes: the calibration already trains one command, rest vs task; more waits for a better board),
+3.5 (waits for 1.6). Nothing of 0.12 is tested with the mask on yet: only with the simulator and an external
+OSC / WebSocket client.
+
 From three sources: what other EEG software gives artists (OpenBCI GUI, Mind Monitor, Emotiv, Neurosity, PiEEG's own
 dashboard), PiEEG's documentation (docs.pieeg.com, read on 2026-11-17) and what the first real tests with the mask
 taught us. Effort: **S** = hours, **M** = one or two days, **L** = a week or more. Each phase stands on its own: the

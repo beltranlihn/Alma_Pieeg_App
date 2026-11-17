@@ -32,6 +32,7 @@ export class PiEEGDevice {
     this.onSamples = null;
     this.onStatus = null;
     this.stats = { notifications: 0, samples: 0, lastLen: 0, oddBytes: 0 };
+    this.maxReconnects = 5;           // visitor mode: Infinity
     this._onNotify = this._onNotify.bind(this);
     this._onDisconnect = this._onDisconnect.bind(this);
   }
@@ -121,15 +122,17 @@ export class PiEEGDevice {
     if (this.onSamples) this.onSamples(samples, performance.now());
   }
 
-  /** The link dropped: try to come back on our own (5 tries over ~15 s) before telling the engine. */
+  /** The link dropped: try to come back on our own (maxReconnects tries, 5 by default over ~15 s; visitor mode
+   *  sets Infinity and keeps trying every 10 s) before telling the engine. */
   async _onDisconnect() {
     this.char = null;
     if (this._stopping || this._starting || this._opening || this._reconnecting) return;
     this._reconnecting = true;
     try {
-      for (let attempt = 1; attempt <= 5 && !this._stopping; attempt++) {
-        this._status(`Signal lost · reconnecting (${attempt} of 5)…`);
-        await wait(attempt === 1 ? 500 : 3000);
+      const max = this.maxReconnects;
+      for (let attempt = 1; attempt <= max && !this._stopping; attempt++) {
+        this._status(`Signal lost · reconnecting (${Number.isFinite(max) ? `${attempt} of ${max}` : `try ${attempt}`})…`);
+        await wait(attempt === 1 ? 500 : attempt <= 5 ? 3000 : 10000);
         if (this._stopping) return;
         try {
           await this._open();

@@ -41,13 +41,18 @@ function decodeFrames(buf) {
 
 /** Native clients (TouchDesigner, Unity, Unreal, Python) send no Origin. A browser page does: only pages from
  *  this computer (file://, localhost) may connect, so a website open in a browser cannot read someone's signals. */
-function originAllowed(origin) {
+function originAllowed(origin, host) {
   if (!origin || origin === 'null') return true;
-  try { const u = new URL(origin); return u.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname); } catch (_) { return false; }
+  try {
+    const u = new URL(origin);
+    if (host && u.host === host) return true;          // the viewer page this server serves (same origin)
+    return u.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+  } catch (_) { return false; }
 }
 
 class Hub {
-  constructor({ retryMs = 5000 } = {}) { this.servers = new Map(); this.retryMs = retryMs; }   // "host:port" → { server, clients:Set, error, host, port }
+  // onMessage(port, text): what a client sends as text (markers, PiEEG commands) · page(): the HTML served at "/"
+  constructor({ retryMs = 5000, onMessage = null, page = null } = {}) { this.servers = new Map(); this.retryMs = retryMs; this.onMessage = onMessage; this.page = page; }   // "host:port" → { server, clients:Set, error, host, port, welcome }
   key(host, port) { return `${host || '0.0.0.0'}:${port}`; }
 
   /** Keep exactly these listeners open: [{ host, port }]. */
@@ -58,25 +63,32 @@ class Hub {
       const k = this.key(d.host, d.port), s = this.servers.get(k);
       if (s && s.error && Date.now() - s.errorAt >= this.retryMs) this._close(k, s);   // a port that was taken: try again, not more often than retryMs
       if (!this.servers.has(k)) this._open(k, d.host || '0.0.0.0', d.port);
+      this.servers.get(k).welcome = d.welcome || '';  // sent to each client as it connects (PiEEG's server greets too)
     }
   }
 
   _open(k, host, port) {
-    const entry = { host, port, clients: new Set(), error: '', server: null };
-    const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(`EEG Alma Center · WebSocket on ws://${req.headers.host || `${host}:${port}`}\n`); });
+    const entry = { host, port, clients: new Set(), error: '', server: null, welcome: '' };
+    const server = http.createServer((req, res) => {
+      const html = this.page && (req.url === '/' || req.url.startsWith('/?')) ? this.page() : null;
+      if (html) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(html); return; }
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(`EEG Alma Center · WebSocket on ws://${req.headers.host || `${host}:${port}`}\n`);
+    });
     server.on('upgrade', (req, socket) => {
       const key = req.headers['sec-websocket-key'];
       if (!key || String(req.headers.upgrade || '').toLowerCase() !== 'websocket') { socket.destroy(); return; }
-      if (!originAllowed(req.headers.origin)) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
+      if (!originAllowed(req.headers.origin, req.headers.host)) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
       socket.write(['HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade', `Sec-WebSocket-Accept: ${acceptKey(key)}`, '', ''].join('\r\n'));
       socket.setNoDelay(true);
       entry.clients.add(socket);
+      if (entry.welcome) socket.write(encodeFrame(entry.welcome));
       let pending = Buffer.alloc(0);
       socket.on('data', (chunk) => {
         const { frames, rest } = decodeFrames(Buffer.concat([pending, chunk])); pending = rest;
         for (const f of frames) {
           if (f.opcode === 8) { try { socket.end(encodeFrame(f.payload.subarray(0, 2), 8)); } catch (_) { /* gone */ } entry.clients.delete(socket); }
           else if (f.opcode === 9) socket.write(encodeFrame(f.payload, 10));
+          else if (f.opcode === 1 && this.onMessage && f.payload.length <= 65536) { try { this.onMessage(port, f.payload.toString('utf8')); } catch (_) { /* the app decides */ } }
         }
       });
       const drop = () => entry.clients.delete(socket);

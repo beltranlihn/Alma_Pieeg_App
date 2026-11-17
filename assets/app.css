@@ -313,3 +313,12 @@ header .brand:hover { color: #ffffff; }
 .about-third .v { text-align: right; white-space: nowrap; }
 .about-licence { white-space: pre-wrap; font: 11px/1.5 ui-monospace, Consolas, monospace; color: var(--ink-3); background: var(--well-deep); border: 1px solid var(--line); border-radius: var(--radius-4); padding: 12px; margin: 6px 0 0; }
 .about-body .dim { color: var(--ink-3); }
+
+/* routing: rules, cues, inputs, PiEEG compatibility (src/pages/routing-more.js) */
+.table.rules .trow { grid-template-columns: 36px 1fr 2fr 84px 64px 56px 72px 1.1fr 1.4fr 1.1fr 120px; }
+.table.cues .trow { grid-template-columns: 36px 80px 1fr 1fr 1.4fr 70px 90px 90px; }
+.table.rules .trow.empty-row, .table.cues .trow.empty-row { grid-template-columns: 1fr; color: var(--ink-3); }
+.routing .io-rows, .routing .cue-opts { margin: 0 24px; max-width: 720px; }
+.routing .hint code { font: 11px ui-monospace, Consolas, monospace; color: var(--ink-2); background: var(--s2); padding: 0 4px; border-radius: 2px; }
+.routing .hint { padding-left: 24px; padding-right: 24px; }
+.trow a[data-ext] { color: var(--auto-live); text-decoration: none; }
