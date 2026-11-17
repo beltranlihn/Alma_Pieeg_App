@@ -1,7 +1,7 @@
 // The catalogue of signals a mapping can send. Each has an id, a label, a group, a natural range and
 // a getter over the engine's features. Keep ids stable: they are saved in config.json.
 import { CHANNELS } from './ble.js';
-import { XR_FACE } from './scope.js';
+import { XR_FACE, onMontage } from './montage.js';
 import { BANDS } from './fft.js';
 import { INDICES } from './indices.js';
 import { GESTURES } from './face.js';
@@ -46,6 +46,8 @@ add('session.elapsed', 'Session · elapsed seconds', 'Session results', 's', [0,
 add('session.active', 'Session · running (1/0)', 'Session results', '0/1', [0, 1], (f) => f.sessionActive, 'event');
 add('contact.ok', 'Contact · all channels good (1/0)', 'Contact', '0/1', [0, 1], (f) => f.contactOk, 'event');
 add('contact.good', 'Contact · channels good', 'Contact', 'n', [0, CHANNELS], (f) => f.contactGood);
+add('contact.ref', 'Contact · reference quiet (1/0)', 'Contact', '0/1', [0, 1], (f) => f.refOk, 'event');
+add('contact.common', 'Contact · signal common to all channels (reference noise)', 'Contact', 'µV', [0, 100], (f) => f.refCommon);
 add('stream.rate', 'Stream · samples per second', 'Contact', '/s', [0, 300], (f) => f.rate);
 for (let ch = 0; ch < CHANNELS; ch++) {
   const e = XR_FACE[ch];
@@ -56,6 +58,15 @@ for (let ch = 0; ch < CHANNELS; ch++) {
 for (let ch = 0; ch < CHANNELS; ch++) for (const b of BANDS) add(`ch${ch + 1}.${b.id}`, `${XR_FACE[ch].id} · ${b.label}`, 'Per channel · bands (absolute)', 'µV²', [0, 200], (f) => f.bands[ch][b.id]);
 
 export const SIGNAL_BY_ID = Object.fromEntries(SIGNALS.map((s) => [s.id, s]));
+// When the electrode map changes, the per-channel labels say the new place.
+onMontage(() => {
+  for (let ch = 0; ch < CHANNELS; ch++) {
+    const e = XR_FACE[ch];
+    if (SIGNAL_BY_ID[`ch${ch + 1}.rms`]) SIGNAL_BY_ID[`ch${ch + 1}.rms`].label = `${e.id} · rms (1 s) · ${e.place}`;
+    if (SIGNAL_BY_ID[`ch${ch + 1}.env`]) SIGNAL_BY_ID[`ch${ch + 1}.env`].label = `${e.id} · envelope (80 ms) · ${e.place}`;
+    if (SIGNAL_BY_ID[`ch${ch + 1}.emg`]) SIGNAL_BY_ID[`ch${ch + 1}.emg`].label = `${e.id} · muscle (above 20 Hz, 100 ms) · ${e.place}`;
+  }
+});
 export const SIGNAL_GROUPS = [...new Set(SIGNALS.map((s) => s.group))];
 
 // Presets were removed: OSC is generic (name, host, port, type). Keep the Soul Charger addresses here as

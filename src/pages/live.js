@@ -83,6 +83,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
             <div class="row"><div class="k">Band-pass 1–40 Hz</div><div class="seg-group" data-set="bandpass"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
             <div class="row"><div class="k">Notch</div><div class="seg-group" data-set="notch"><button class="seg on" data-v="50">50 Hz</button><button class="seg" data-v="60">60 Hz</button><button class="seg" data-v="0">Off</button></div></div>
             <div class="row"><div class="k">Spike rejection</div><div class="seg-group" data-set="hampel"><button class="seg on" data-v="1">On</button><button class="seg" data-v="0">Off</button></div></div>
+            <div class="row" title="Average reference: each channel minus the mean of the channels with contact. Use it when the reference is noisy: what all channels share goes away (also some EEG that every channel shares)."><div class="k">Reference</div><div class="seg-group" data-set="car"><button class="seg on" data-v="0">As recorded</button><button class="seg" data-v="1">Average</button></div></div>
           </div>
         </div>
 
@@ -103,7 +104,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
   ui.liveView = view;
 
   // ── settings (persisted) ──
-  const settings = Object.assign({ seconds: 8, scale: 100, source: 'filt', bandpass: 1, notch: 50, hampel: 1, palette: 'mono', custom: [...DEFAULT_CUSTOM], lineWidth: 1, grid: 1, maxHz: 60 }, ui.display || {});
+  const settings = Object.assign({ seconds: 8, scale: 100, source: 'filt', bandpass: 1, notch: 50, hampel: 1, car: 0, palette: 'mono', custom: [...DEFAULT_CUSTOM], lineWidth: 1, grid: 1, maxHz: 60 }, ui.display || {});
   function applySettings() {
     scope.seconds = settings.seconds; scope.scaleUv = settings.scale; scope.source = settings.source;
     const pal = PALETTE_BY_ID[settings.palette] || PALETTES[0];
@@ -112,7 +113,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
     spectrum.maxHz = settings.maxHz;
     scope.lineWidth = settings.lineWidth; spectrum.lineWidth = settings.lineWidth; bands.lineWidth = settings.lineWidth; bands.colors = settings.palette === 'mono' ? null : colors; scope.grid = !!settings.grid;
     $('customRow').style.display = settings.palette === 'custom' ? '' : 'none';
-    engine.setFilters({ hampel: !!settings.hampel, bandpass: !!settings.bandpass, notch: settings.notch });
+    engine.setFilters({ hampel: !!settings.hampel, bandpass: !!settings.bandpass, notch: settings.notch, car: !!settings.car }); scope.car = !!settings.car;
     ui.display = { ...settings }; saveConfig();
   }
   root.querySelectorAll('.seg-group').forEach((group) => {

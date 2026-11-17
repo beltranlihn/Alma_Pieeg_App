@@ -3,9 +3,12 @@ import { HeadView } from '../head.js';
 import { CHANNELS } from '../ble.js';
 import { STATUS } from '../quality.js';
 import { XR_FACE } from '../scope.js';
+import { mountMontageEditor } from '../montageview.js';
+import { montage, refSite, biasSite, onMontage } from '../montage.js';
 import { BANDS } from '../fft.js';
 
-const STATUS_LABEL = { good: 'good', fair: 'fair', poor: 'poor', railed: 'railed · reference lost', none: 'no contact', wait: '…' };
+const STATUS_LABEL = { good: 'good', fair: 'fair', poor: 'poor', railed: 'at the converter limit', none: 'flat', wait: '…' };
+const REF_LABEL = { good: 'quiet', noisy: 'noisy', lost: 'lost', wait: '…' };
 const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '' };
 
 export function mountHome(root, { engine, ui }) {
@@ -25,8 +28,11 @@ export function mountHome(root, { engine, ui }) {
         <h2>Ready to start</h2>
         <div class="rows" id="checks"></div>
         <h2>Contact</h2>
+        <div class="rows contact" id="homeRef"></div>
         <div class="rows contact" id="homeContact"></div>
         <div class="hint" id="homeContactSummary"></div>
+        <h2><span>Electrodes<span class="count" id="homeMapName"></span></span><button class="seg" id="homeMapEdit">Edit map</button></h2>
+        <div class="rows contact" id="homeMap"></div>
         <h2>Heart rate <button class="seg" id="antBtn">Start ANT+ stick</button></h2>
         <div class="rows" id="straps"></div>
         <div class="hint" id="antHint"></div>
@@ -63,7 +69,7 @@ export function mountHome(root, { engine, ui }) {
   const CHECKS = [
     { id: 'found', label: 'Sensor connected', test: () => engine.state === 'streaming' },
     { id: 'rate', label: 'Streaming at 250 /s', test: () => engine.state === 'streaming' && engine.features.rate > 230 },
-    { id: 'ref', label: 'Reference in contact', test: () => engine.quality && !engine.quality.some((q) => q.status === STATUS.RAILED), pending: () => !engine.quality },
+    { id: 'ref', label: 'Reference quiet', test: () => engine.quality && engine.quality.ref && engine.quality.ref.status === 'good', pending: () => !engine.quality || !engine.quality.ref || engine.quality.ref.status === 'wait', extra: () => engine.quality && engine.quality.ref && engine.quality.ref.status !== 'good' ? `${REF_LABEL[engine.quality.ref.status]} · ${engine.quality.ref.common.toFixed(0)} µV` : '' },
     { id: 'contact', label: 'All electrodes on the skin', test: () => engine.quality && engine.quality.every((q) => q.status === STATUS.GOOD || q.status === STATUS.FAIR), pending: () => !engine.quality },
     { id: 'blink', label: 'Blink test (blink 3 times)', test: () => engine.blink.count >= 3, extra: () => engine.blink.warmed ? `${engine.blink.count} seen` : '' },
   ];
@@ -73,6 +79,9 @@ export function mountHome(root, { engine, ui }) {
     row.innerHTML = `<div class="dot"></div><div class="k">${c.label}</div><div class="v dim"></div>`;
     checksEl.appendChild(row); return row;
   });
+  const refEl = $('homeRef');
+  refEl.innerHTML = '<div class="row"><div class="dot"></div><div class="k"><b>Ref</b> · <span class="site"></span></div><div class="v"></div></div>';
+  const refRow = refEl.firstChild;
   const contactEl = $('homeContact');
   const contactRows = XR_FACE.map((e) => {
     const row = document.createElement('div'); row.className = 'row';
@@ -87,7 +96,7 @@ export function mountHome(root, { engine, ui }) {
     $('homeConnect').disabled = streaming || engine.state === 'connecting';
     $('homeSim').disabled = streaming || engine.state === 'connecting';
     $('homeDisconnect').disabled = !engine.device;
-    face.update(engine.quality);
+    face.update(engine.quality, engine.quality ? engine.quality.ref : null);
     const nGood = engine.quality ? engine.quality.filter((q) => q.status === 'good').length : 0;
     $('capHeadDot').className = 'dot ' + (streaming ? (nGood === 8 ? 'on' : 'warn') : '');
     $('capHead').textContent = streaming ? `${nGood}/8 contact` : 'not connected';
@@ -102,13 +111,21 @@ export function mountHome(root, { engine, ui }) {
       row.children[2].textContent = pending ? '' : ok ? (c.extra ? c.extra() || 'ok' : 'ok') : (c.extra ? c.extra() || 'not yet' : 'not yet');
     });
     const q = engine.quality; let good = 0;
-    XR_FACE.forEach((_, ch) => {
+    XR_FACE.forEach((e, ch) => {
       const r = contactRows[ch], s = q ? q[ch].status : 'wait';
       r.children[0].className = 'dot ' + STATUS_DOT[s];
+      r.children[1].innerHTML = `<b>${e.id}</b> · ${e.place}`;
       r.children[2].textContent = s === 'wait' ? '' : `${q[ch].rms.toFixed(0)} µV · ${STATUS_LABEL[s]}`;
       if (s === STATUS.GOOD) good++;
     });
-    $('homeContactSummary').textContent = !streaming ? '' : !q ? 'Reading…' : good === CHANNELS ? 'All good.' : `${good}/${CHANNELS} good. Reseat the mask where it is grey or red.`;
+    // the reference: what every channel shares (it reads as all eight channels bad at once)
+    const ref = q && q.ref ? q.ref : { status: 'wait', common: 0 };
+    refRow.children[0].className = 'dot ' + (ref.status === 'good' ? 'on' : ref.status === 'wait' ? '' : 'bad');
+    refRow.querySelector('.site').textContent = refSite().label;
+    refRow.children[2].textContent = ref.status === 'wait' || !streaming ? '' : `${ref.common.toFixed(0)} µV common · ${REF_LABEL[ref.status]}`;
+    const refHint = ref.status === 'noisy' ? `Every channel carries the same ${ref.common.toFixed(0)} µV: the reference (${refSite().label}) or the bias (${biasSite().label}) is not touching well. Press them against the skin; a drop of saline helps. Live › Average reference hides it meanwhile.`
+      : ref.status === 'lost' ? `Most channels are at the converter limit: the reference (${refSite().label}) is off the skin.` : '';
+    $('homeContactSummary').textContent = !streaming ? '' : !q ? 'Reading…' : refHint || (good === CHANNELS ? 'All good.' : `${good}/${CHANNELS} good. Reseat the mask where it is grey or red.`);
     $('hDevice').textContent = engine.deviceName || '—';
     $('hRate').textContent = streaming ? `${engine.features.rate.toFixed(0)} /s` : '—';
     $('hPackets').textContent = streaming ? `${engine.stats.notifications} · ${engine.stats.lastLen} B` : '—';
@@ -141,6 +158,15 @@ export function mountHome(root, { engine, ui }) {
     const now = Date.now();
     straps.forEach((s, i) => { const row = el.children[i]; if (!row) return; const alive = now - s.lastSeen < 8000; row.children[0].className = 'dot ' + (alive ? 'on' : ''); row.querySelector('.bpm').textContent = alive ? `${s.bpm} bpm` : 'lost'; });
   }
+  // electrode map: name, reference and bias sites, and the editor
+  const editor = mountMontageEditor(document.body);
+  $('homeMapEdit').addEventListener('click', () => editor.open());
+  function renderMap() {
+    $('homeMapName').textContent = montage.name;
+    $('homeMap').innerHTML = `<div class="row"><div class="k"><b>Ref</b> · reference</div><div class="v">${refSite().label}</div></div><div class="row"><div class="k"><b>Bias</b> · ground</div><div class="v">${biasSite().label}</div></div>`;
+    refresh();
+  }
+  onMontage(renderMap); renderMap();
   engine.addEventListener('ant', refresh); engine.addEventListener('strap', renderStraps);
   for (const ev of ['state', 'quality', 'blink', 'disconnected', 'heart']) engine.addEventListener(ev, refresh);
   const timer = setInterval(refresh, 1000);

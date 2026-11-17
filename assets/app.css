@@ -255,3 +255,24 @@ body.calibrating .sb-cue { display: flex; }
 .live-side .row.sel { box-shadow: inset 2px 0 0 var(--ink); padding-left: 8px; }
 .live-side .k .dim { color: var(--ink-3); }
 .sessions .results .result-time { flex: 1.4; }
+
+/* ── Electrode map editor (0.10) ── */
+.mmap-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
+.mmap-panel { width: min(1180px, 94vw); max-height: 92vh; overflow: auto; background: var(--s1); border: 1px solid var(--line); border-radius: var(--radius-4); }
+.mmap-panel h2 { margin: 0; }
+.mmap-body { display: grid; grid-template-columns: 1fr 380px; gap: 0; }
+.mmap-draw { padding: 16px 20px; border-right: 1px solid var(--line); }
+.mmap-draw svg { width: 100%; height: auto; display: block; background: var(--s0); border-radius: var(--radius-3); }
+.mmap-draw .hint { padding: 8px 0 0; }
+.mmap-outline { fill: none; stroke: rgba(255,255,255,0.18); stroke-width: 3; }
+.mmap-mid { stroke: rgba(255,255,255,0.06); stroke-width: 2; stroke-dasharray: 8 8; }
+.mmap-site { cursor: pointer; }
+.mmap-site circle { fill: var(--s2); stroke: var(--ink-3); stroke-width: 3; }
+.mmap-site text { fill: var(--ink); font: 600 26px Geist, system-ui, sans-serif; text-anchor: middle; pointer-events: none; }
+.mmap-site:hover circle { fill: var(--state-hover); }
+.mmap-site.sel circle { stroke-width: 6; fill: var(--state-on); }
+.mmap-side { padding: 8px 0 16px; }
+.mmap-side .rows { margin: 0 20px; }
+.mmap-side .row.sel .k b { text-decoration: underline; text-underline-offset: 3px; }
+.mmap-actions { display: flex; justify-content: flex-end; padding: 4px 20px 8px; }
+.home-side h2 .count { margin-left: 8px; }

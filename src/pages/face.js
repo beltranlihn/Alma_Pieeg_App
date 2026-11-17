@@ -11,7 +11,9 @@ import { GAZE_COLOR, TENSION_COLOR, FACE_COLOR } from '../colors.js';
 import { cues } from '../tones.js';
 
 const READY_COLOR = { ready: 'var(--toggle-on)', improving: 'var(--auto-ovr)', weak: 'var(--danger)' };
-const ELEC_GROUPS = [[0, 1], [2, 3], [4, 5], [6, 7]];   // left temple · left forehead · right forehead · right temple
+import { groups, onMontage } from '../montage.js';
+// left temple · left forehead · right forehead · right temple, as the montage says
+const elecGroups = () => [groups.leftTemples, groups.leftForehead, groups.rightForehead, groups.rightTemples].filter((g) => g.length);
 
 export function mountFace(root, { engine, ui, saveConfig }) {
   root.innerHTML = `
@@ -87,7 +89,7 @@ export function mountFace(root, { engine, ui, saveConfig }) {
     row.innerHTML = `
       <div class="g-name"><b>${g.label}</b><span>${g.hint}</span></div>
       <div class="g-ready"><div class="meter"><div class="meter-fill"></div></div><span class="g-score"></span></div>
-      <div class="g-elec">${ELEC_GROUPS.map((grp) => `<span>${grp.map((ch) => `<i data-ch="${ch}" title="${XR_FACE[ch].id} · ${XR_FACE[ch].place}"></i>`).join('')}</span>`).join('')}</div>
+      <div class="g-elec">${elecGroups().map((grp) => `<span>${grp.map((ch) => `<i data-ch="${ch}" title="${XR_FACE[ch].id} · ${XR_FACE[ch].place}"></i>`).join('')}</span>`).join('')}</div>
       <div class="g-live"><div class="meter"><div class="meter-fill" style="background:${FACE_COLOR}"></div></div><div class="dot"></div></div>
       <div class="g-actions"><button class="seg g-rec">Record</button><button class="seg danger g-clear">Clear</button></div>`;
     row.querySelector('.g-rec').addEventListener('click', () => { if (engine.gestures.recording && engine.gestures.rec.id === g.id) engine.cancelGesture(); else if (engine.startGesture(g.id)) cues.start(); });
@@ -95,7 +97,12 @@ export function mountFace(root, { engine, ui, saveConfig }) {
     list.appendChild(row); rows[g.id] = row;
   }
   $('gClearAll').addEventListener('click', () => engine.clearGestures());
-  $('gElecLegend').innerHTML = ELEC_GROUPS.map((grp) => `<div class="row"><div class="k"><b>${grp.map((ch) => XR_FACE[ch].id).join(' ')}</b> · ${XR_FACE[grp[0]].place.split(' · ')[0]}</div></div>`).join('');
+  function renderElecLegend() {
+    $('gElecLegend').innerHTML = elecGroups().map((grp) => `<div class="row"><div class="k"><b>${grp.map((ch) => XR_FACE[ch].id).join(' ')}</b> · ${XR_FACE[grp[0]].place.split(' · ')[0]}</div></div>`).join('');
+    for (const g of GESTURES) rows[g.id].querySelector('.g-elec').innerHTML = elecGroups().map((grp) => `<span>${grp.map((ch) => `<i data-ch="${ch}" title="${XR_FACE[ch].id} · ${XR_FACE[ch].place}"></i>`).join('')}</span>`).join('');
+  }
+  renderElecLegend();
+  onMontage(() => { renderElecLegend(); renderGestures(); });
 
   function renderGestures() {
     const tr = engine.gestures, rec = tr.rec;

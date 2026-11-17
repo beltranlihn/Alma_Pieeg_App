@@ -16,8 +16,8 @@ import { GestureTrainer, GESTURES, faceFeatures, FEATURE_DIM } from './face.js';
 import { Gaze } from './gaze.js';
 import { Tension } from './tension.js';
 
-export const FOREHEAD = [2, 3, 4, 5];
-export const LEFT_FOREHEAD = [2, 3], RIGHT_FOREHEAD = [4, 5];   // for frontal alpha asymmetry
+// Which channels are forehead / temples / left / right comes from the montage (montage.js), never fixed numbers.
+import { groups, onMontage } from './montage.js';
 const isBad = (q) => !q || q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE;
 
 function rmssdOf(rr) { if (rr.length < 3) return 0; let s = 0; for (let k = 1; k < rr.length; k++) { const d = rr[k].rr - rr[k - 1].rr; s += d * d; } return Math.sqrt(s / (rr.length - 1)); }
@@ -56,7 +56,8 @@ export class Engine extends EventTarget {
       this._emit('session');
     }, 100);
     this.fft = new FFT(256, this.fs);
-    this.blink = new BlinkDetector(this.fs, FOREHEAD);
+    this.blink = new BlinkDetector(this.fs, groups.forehead, groups.temples);
+    onMontage(() => { this.blink.setChannels(groups.forehead, groups.temples); this.tension.reset(); this._emit('montage'); });
     this.norms = Object.fromEntries(INDICES.map((i) => [i.id, new RollingNorm(60, 10)]));
     this.calib = new Calibration(CHANNELS);   // per-person REST / ACTIVE calibration (PiEEG Avatar Foundation)
     this.device = null;
@@ -67,7 +68,9 @@ export class Engine extends EventTarget {
     if (window.alma.onAnt) window.alma.onAnt((ev) => this._onAnt(ev));
     this.state = 'idle';                       // idle | connecting | streaming | error
     this.statusText = 'No device';
-    this.filters = { hampel: true, bandpass: true, low: 1, high: 40, notch: 50 };
+    // car: average reference for the analysis (bands, indices, calibration) and the Waves view. The rings keep the
+    // signal as recorded, so the contact check still sees a noisy reference for what it is.
+    this.filters = { hampel: true, bandpass: true, low: 1, high: 40, notch: 50, car: false };
     this.quality = null;
     this.features = this._emptyFeatures();
     this._filtTmp = new Float32Array(CHANNELS);
@@ -85,7 +88,7 @@ export class Engine extends EventTarget {
       bands: Array.from({ length: CHANNELS }, () => ({ delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0, total: 0, dominant: 0 })),
       avg: { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0, total: 0, dominant: 0 },
       rel: { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0 },
-      calm: 0, blinkCount: 0, blinkPulse: 0, blinkAmp: 0, contactGood: 0, contactOk: 0, rate: 0,
+      calm: 0, blinkCount: 0, blinkPulse: 0, blinkAmp: 0, contactGood: 0, contactOk: 0, rate: 0, refOk: 0, refCommon: 0,
       idx: Object.fromEntries(INDICES.map((i) => [i.id, 0])),       // raw ratios (smoothed)
       idxNorm: Object.fromEntries(INDICES.map((i) => [i.id, 0.5])), // 0–1 against the last minute
       heart: { bpm: 0, rmssd: 0, beat: 0, connected: 0 },
@@ -101,9 +104,10 @@ export class Engine extends EventTarget {
   }
 
   setFilters(patch) {
-    const mains = this.filters.notch;
-    Object.assign(this.filters, patch); for (const c of this.chains) c.configure(this.filters);
-    if (this.filters.notch !== mains) for (const c of this.wideChains) c.configure(this.filters.notch);
+    const before = { ...this.filters };
+    Object.assign(this.filters, patch);
+    if (['hampel', 'bandpass', 'low', 'high', 'notch'].some((k) => before[k] !== this.filters[k])) for (const c of this.chains) c.configure(this.filters);
+    if (before.notch !== this.filters.notch) for (const c of this.wideChains) c.configure(this.filters.notch);
     this._emit('filters');
   }
   /** One protocol at a time: calibration, a gesture recording, the gaze dots or the tension range. */
@@ -242,14 +246,19 @@ export class Engine extends EventTarget {
     if (++this._fftPhase % 2 === 0) {
       const n = this.fft.n, base = r.at(n - 1);
       const avg = { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0, total: 0, dominant: 0 };
+      let carRef = null;
+      if (this.filters.car) {          // average of the channels with contact, sample by sample
+        const use = []; for (let ch = 0; ch < CHANNELS; ch++) if (!bad || !bad[ch]) use.push(ch);
+        if (use.length >= 3) { carRef = new Float64Array(n); for (let i = 0; i < n; i++) { const k = (base + i) % r.size; let s = 0; for (const ch of use) s += r.filt[ch][k]; carRef[i] = s / use.length; } }
+      }
       for (let ch = 0; ch < CHANNELS; ch++) {
         const arr = r.filt[ch], size = r.size;
-        this.fft.compute((i) => arr[(base + i) % size]);
+        this.fft.compute(carRef ? (i) => arr[(base + i) % size] - carRef[i] : (i) => arr[(base + i) % size]);
         f.psd[ch].set(this.fft.psd);
         f.bands[ch] = this.fft.bandPowers();
       }
       let used = 0;
-      for (const ch of FOREHEAD) { const q = this.quality && this.quality[ch]; if (q && (q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE)) continue; for (const b of BANDS) avg[b.id] += f.bands[ch][b.id]; avg.total += f.bands[ch].total; avg.dominant += f.bands[ch].dominant; used++; }
+      for (const ch of groups.forehead) { const q = this.quality && this.quality[ch]; if (q && (q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE)) continue; for (const b of BANDS) avg[b.id] += f.bands[ch][b.id]; avg.total += f.bands[ch].total; avg.dominant += f.bands[ch].dominant; used++; }
       if (used) { for (const b of BANDS) avg[b.id] /= used; avg.total /= used; avg.dominant /= used; }
       f.avg = avg;
       for (const b of BANDS) f.rel[b.id] = avg.total > 0 ? avg[b.id] / avg.total : 0;
@@ -282,7 +291,7 @@ export class Engine extends EventTarget {
       // frontal alpha asymmetry: ln α right − ln α left (PiEEG Glitching Reality), and the beta surge against
       // a ~20 s baseline (PiEEG Premeditatio Malorum): how far beta jumps above the person's recent level
       const side = (chs) => { let s = 0, n = 0; for (const ch of chs) if (!bad || !bad[ch]) { s += f.bands[ch].alpha; n++; } return n ? s / n : null; };
-      const aL = side(LEFT_FOREHEAD), aR = side(RIGHT_FOREHEAD);
+      const aL = side(groups.leftForehead), aR = side(groups.rightForehead);
       if (aL != null && aR != null) {
         if (!this._faa.n++) { this._faa.l = aL; this._faa.r = aR; }
         this._faa.l += (aL - this._faa.l) * 0.22; this._faa.r += (aR - this._faa.r) * 0.22;
@@ -321,6 +330,8 @@ export class Engine extends EventTarget {
       this.features.rate = 0; this._emit('state'); return;
     }
     this.quality = assessAll(this.rings, this.fs);
+    const ref = this.quality.ref || { status: 'wait', common: 0 };
+    this.features.refOk = ref.status === 'good' ? 1 : 0; this.features.refCommon = ref.common;
     const good = this.quality.filter((q) => q.status === STATUS.GOOD).length;
     this.features.contactGood = good; this.features.contactOk = good === CHANNELS ? 1 : 0;
     const now = performance.now(), dt = (now - this._rate.t0) / 1000;

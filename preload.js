@@ -8,7 +8,7 @@ const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return
 const flags = { sim: argv.includes('--sim'), events: argv.includes('--events'), page: pageArg ? pageArg.split('=')[1] : null, preset: arg('preset'), view: arg('view'), session: arg('session'), calib: arg('calib'), face: arg('face'), wstest: arg('wstest'), probe: argv.some((a) => a.startsWith('--probe=')), gaze: argv.includes('--gaze'), tension: argv.includes('--tension') };
 
 contextBridge.exposeInMainWorld('alma', {
-  version: '0.9.0',
+  version: '0.10.0',
   flags,
   saveSession: (name, csvText, metaJson) => ipcRenderer.invoke('save-session', name, csvText, metaJson),
   saveFiles: (name, files) => ipcRenderer.invoke('save-files', name, files),

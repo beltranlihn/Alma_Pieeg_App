@@ -1,21 +1,14 @@
 // Oscilloscope: 8 stacked traces on one canvas, drawn every animation frame from the ring buffers.
 import { CHANNELS } from './ble.js';
 
-export const XR_FACE = [
-  { id: 'Ch1', place: 'left temple · lower' },
-  { id: 'Ch2', place: 'left temple · upper' },
-  { id: 'Ch3', place: 'left forehead' },
-  { id: 'Ch4', place: 'left forehead' },
-  { id: 'Ch5', place: 'right forehead' },
-  { id: 'Ch6', place: 'right forehead' },
-  { id: 'Ch7', place: 'right temple · upper' },
-  { id: 'Ch8', place: 'right temple · lower' },
-];
+// Channel labels follow the montage (montage.js): Home › Electrodes says which site each input is on.
+export { XR_FACE } from './montage.js';
+import { XR_FACE } from './montage.js';
 
 export class Scope {
   constructor(canvas, rings) {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.rings = rings;
-    this.seconds = 8; this.scaleUv = 100; this.source = 'filt'; this.quality = null; this.marks = []; this.visible = null; this.channelColors = null; this.lineWidth = 1; this.grid = true;
+    this.car = false; this.seconds = 8; this.scaleUv = 100; this.source = 'filt'; this.quality = null; this.marks = []; this.visible = null; this.channelColors = null; this.lineWidth = 1; this.grid = true;
     this.colors = { bg: '#111111', line: 'rgba(255,255,255,0.10)', lineSoft: 'rgba(255,255,255,0.05)', ink: '#E0E0E0', ink3: '#8C8C8C', dim: '#6D6D6D', trace: '#E0E0E0', traceBad: '#8C8C8C', mark: '#E5B567' };
     this._resize = this._resize.bind(this);
     window.addEventListener('resize', this._resize);
@@ -48,6 +41,11 @@ export class Scope {
     const buf = this.source === 'raw' ? rings.raw : rings.filt;
     const size = rings.size, start = (rings.write - n + size) % size;
     const step = Math.max(1, Math.floor(n / plotW));          // never draw more points than pixels
+    let carRef = null;
+    if (this.car && this.source !== 'raw' && n > 1) {          // average reference: minus the mean of the channels with contact
+      const use = []; for (let ch = 0; ch < CHANNELS; ch++) { const q = this.quality && this.quality[ch]; if (!q || !(q.status === 'poor' || q.status === 'railed' || q.status === 'none')) use.push(ch); }
+      if (use.length >= 3) { carRef = new Float64Array(Math.ceil(n / step)); for (let i = 0, j = 0; i < n; i += step, j++) { const k = (start + i) % size; let s = 0; for (const ch of use) s += buf[ch][k]; carRef[j] = s / use.length; } }
+    }
     for (let ch = 0; ch < CHANNELS; ch++) {
       const y0 = top + laneH * (ch + 0.5);
       ctx.strokeStyle = this.colors.line; ctx.beginPath(); ctx.moveTo(left, Math.round(top + laneH * (ch + 1)) + 0.5); ctx.lineTo(w - right, Math.round(top + laneH * (ch + 1)) + 0.5); ctx.stroke();
@@ -65,8 +63,8 @@ export class Scope {
       const bad = q && (q.status === 'poor' || q.status === 'railed' || q.status === 'none');
       ctx.strokeStyle = bad ? this.colors.traceBad : (this.channelColors ? this.channelColors[ch] : this.colors.trace);
       ctx.lineWidth = this.lineWidth; ctx.beginPath();
-      for (let i = 0; i < n; i += step) {
-        const v = arr[(start + i) % size] - mean;
+      for (let i = 0, j = 0; i < n; i += step, j++) {
+        const v = arr[(start + i) % size] - mean - (carRef ? carRef[j] : 0);
         const x = left + (i / n) * plotW, y = y0 - Math.max(-laneH * 0.5, Math.min(laneH * 0.5, v * gain));
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
@@ -82,6 +80,6 @@ export class Scope {
     }
     // scale legend (top right, out of the way of the time axis)
     ctx.textAlign = 'right'; ctx.fillStyle = this.colors.ink3; ctx.font = '11px Geist, Inter, sans-serif';
-    ctx.fillText(`±${this.scaleUv} µV per lane · ${this.source === 'raw' ? 'raw, mean removed' : 'filtered'}`, w - right, top + 2);
+    ctx.fillText(`±${this.scaleUv} µV per lane · ${this.source === 'raw' ? 'raw, mean removed' : this.car ? 'filtered, average reference' : 'filtered'}`, w - right, top + 2);
   }
 }

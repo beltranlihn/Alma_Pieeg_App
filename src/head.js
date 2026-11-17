@@ -7,22 +7,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
-// Where each electrode sits, as a direction from the head centre: azimuth (°, negative = screen left,
-// mirror view: the wearer's left appears on the left) and elevation (° above the eye line).
-const DIRS = [
-  { az: -46, el: 16 },  // Ch1 left temple lower
-  { az: -45, el: 29 },  // Ch2 left temple upper
-  { az: -27, el: 34 },  // Ch3 left forehead outer
-  { az: -11, el: 37 },  // Ch4 left forehead inner
-  { az: 11, el: 37 },   // Ch5 right forehead inner
-  { az: 27, el: 34 },   // Ch6 right forehead outer
-  { az: 45, el: 29 },   // Ch7 right temple upper
-  { az: 46, el: 16 },   // Ch8 right temple lower
-];
-const AUX = [{ az: -4, el: 46 }, { az: 4, el: 46 }];           // reference, bias
+// Where each electrode sits comes from the montage (montage.js): each site has a direction from the head centre
+// (azimuth °, negative = screen left in the mirror view; elevation ° above the eye line). The pads move when
+// the map is edited, so the head always shows the mask as it is wired.
+import { montage, SITE_BY_ID, onMontage } from './montage.js';
+const channelDirs = () => montage.channels.map((s) => SITE_BY_ID[s].dir);
+const auxDirs = () => [SITE_BY_ID[montage.ref].dir, SITE_BY_ID[montage.bias].dir];   // reference, bias
 const CUT_Y = -0.40;                                           // neck plane (head height = 2)
 const EYE_LINE = 0.18;
-const STATUS_COLOR = { good: '#4a8d6f', fair: '#e5b567', poor: '#e06c6c', railed: '#e06c6c', none: '#6d6d6d', wait: null };
+const STATUS_COLOR = { good: '#4a8d6f', fair: '#e5b567', poor: '#e06c6c', railed: '#e06c6c', none: '#6d6d6d', wait: null, noisy: '#e06c6c', lost: '#e06c6c' };
 const SKIN = new THREE.Color('#4b4b4b');
 // heat LUT for activity (0 → 1): skin grey → blue → cyan → green → yellow → red → white, like a topomap
 const LUT_STOPS = ['#3a3f47', '#2f5f9e', '#4fc3e8', '#4a8d6f', '#e8c84b', '#e0645c', '#ffffff'].map((c) => new THREE.Color(c));
@@ -117,22 +110,31 @@ export class HeadView {
     const profile = [[0, 0], [0.026, 0], [0.028, 0.0035], [0.026, 0.009], [0.019, 0.011], [0.009, 0.0118], [0.004, 0.0095], [0, 0.009]].map(([r, h]) => new THREE.Vector2(r, h));
     const padGeo = new THREE.LatheGeometry(profile, 56); padGeo.rotateX(Math.PI / 2);   // axis along +Z so lookAt lays it on the skin
     const ringGeo = new THREE.TorusGeometry(0.0295, 0.0022, 10, 56);
-    this.points = [];
-    DIRS.map(place).forEach(({ p, n: nrm }) => {
+    this._place = place; this._padGeo = padGeo; this._ringGeo = ringGeo;
+    const auxProfile = [[0, 0], [0.016, 0], [0.018, 0.0025], [0.015, 0.0065], [0.006, 0.0078], [0, 0.0072]].map(([r, h]) => new THREE.Vector2(r, h));
+    this._auxGeo = new THREE.LatheGeometry(auxProfile, 40); this._auxGeo.rotateX(Math.PI / 2);
+    this._buildPads();
+    onMontage(() => { if (this.ready) { this._buildPads(); this._lowY = undefined; this.update(this.quality, this.ref); } });
+    this.resetView();
+    this.ready = true; this._resize(); this.update(this.quality);
+  }
+
+  /** Pads for the 8 channels and the reference/bias, at the montage's sites (rebuilt when the map changes). */
+  _buildPads() {
+    for (const o of [...this.pads, ...this.rings, ...(this.aux || [])]) { this.scene.remove(o); o.material.dispose(); }
+    this.pads = []; this.rings = []; this.aux = []; this.points = [];
+    const place = this._place, padGeo = this._padGeo, ringGeo = this._ringGeo;
+    channelDirs().map(place).forEach(({ p, n: nrm }) => {
       this.points.push(p);
       const pad = new THREE.Mesh(padGeo, new THREE.MeshStandardMaterial({ color: 0x6d6d6d, emissive: 0x000000, roughness: 0.4, metalness: 0.15 }));
       pad.position.copy(p).add(nrm.clone().multiplyScalar(0.006)); pad.lookAt(pad.position.clone().add(nrm)); this.scene.add(pad); this.pads.push(pad);
       const ring = new THREE.Mesh(ringGeo, new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }));
       ring.position.copy(pad.position).add(nrm.clone().multiplyScalar(0.004)); ring.lookAt(ring.position.clone().add(nrm)); this.scene.add(ring); this.rings.push(ring);
     });
-    const auxProfile = [[0, 0], [0.016, 0], [0.018, 0.0025], [0.015, 0.0065], [0.006, 0.0078], [0, 0.0072]].map(([r, h]) => new THREE.Vector2(r, h));
-    const auxGeo = new THREE.LatheGeometry(auxProfile, 40); auxGeo.rotateX(Math.PI / 2);
-    AUX.map(place).forEach(({ p, n: nrm }) => {
-      const pad = new THREE.Mesh(auxGeo, new THREE.MeshStandardMaterial({ color: 0x8c8c8c, roughness: 0.4, metalness: 0.6 }));
-      pad.position.copy(p).add(nrm.clone().multiplyScalar(0.005)); pad.lookAt(pad.position.clone().add(nrm)); this.scene.add(pad);
+    auxDirs().map(place).forEach(({ p, n: nrm }) => {
+      const pad = new THREE.Mesh(this._auxGeo, new THREE.MeshStandardMaterial({ color: 0x8c8c8c, roughness: 0.4, metalness: 0.6 }));
+      pad.position.copy(p).add(nrm.clone().multiplyScalar(0.005)); pad.lookAt(pad.position.clone().add(nrm)); this.scene.add(pad); this.aux.push(pad);
     });
-    this.resetView();
-    this.ready = true; this._resize(); this.update(this.quality);
   }
 
   _resize() {
@@ -141,8 +143,12 @@ export class HeadView {
   }
 
   /** Repaint from contact quality (mode 'contact') or from this.values (mode 'value': 0–1 per channel, interpolated). */
-  update(quality) {
-    this.quality = quality; if (!this.ready) return;
+  update(quality, ref) {
+    this.quality = quality; if (ref !== undefined) this.ref = ref; if (!this.ready) return;
+    if (this.aux && this.aux[0]) {           // the reference pad: grey, or the colour of the reference check
+      const rc = this.mode === 'contact' && this.ref ? STATUS_COLOR[this.ref.status] : null;
+      this.aux[0].material.color.set(rc || 0x8c8c8c); this.aux[0].material.emissive.set(rc ? new THREE.Color(rc).multiplyScalar(0.25) : 0x000000);
+    }
     if (this.mode === 'value') return this._paintActivity();
     const cols = [];
     for (let i = 0; i < 8; i++) {

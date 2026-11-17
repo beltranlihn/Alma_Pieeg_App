@@ -7,6 +7,7 @@ import { mountRouting } from './pages/routing.js';
 import { mountFace } from './pages/face.js';
 import { mountSessions } from './pages/sessions.js';
 import { GESTURES } from './face.js';
+import { setMontage, montageJSON, onMontage } from './montage.js';
 import { mountCalibration } from './calview.js';
 
 const $ = (id) => document.getElementById(id);
@@ -18,7 +19,7 @@ const ui = { page: 'home', liveView: 'bands', display: null };
 let saveTimer = null;
 function saveConfig() {
   clearTimeout(saveTimer); router.syncOutputs();
-  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON(), straps: engine.strapSlots, face: savedFace() }, null, 2)), 300);
+  saveTimer = setTimeout(() => window.alma.saveConfig(JSON.stringify({ version: 1, ui, filters: engine.filters, router: router.toJSON(), straps: engine.strapSlots, montage: montageJSON(), face: savedFace() }, null, 2)), 300);
 }
 // The simulator never writes the face model: with --sim the one in the file stays as it is; with the Home
 // Simulator button the engine keeps the person's model aside (savedFaceModel) and gives it back on reconnect.
@@ -28,6 +29,8 @@ function savedFace() {
 }
 const cfg = await window.alma.loadConfig();
 if (cfg) { Object.assign(ui, cfg.ui || {}); if (cfg.filters) Object.assign(engine.filters, cfg.filters); router.fromJSON(cfg.router); if (cfg.straps) engine.strapSlots = { ...cfg.straps }; if (cfg.face && !(window.alma.flags || {}).sim) engine.loadFaceModel(cfg.face); }
+if (cfg && cfg.montage) { const errs = setMontage(cfg.montage); if (errs.length) console.warn('Saved electrode map ignored:', errs.join(' ')); }
+onMontage(saveConfig);
 engine.addEventListener('ant', saveConfig);
 engine.addEventListener('face-model', () => { if (!(window.alma.flags || {}).sim && engine.sourceKind !== 'sim') saveConfig(); });   // a simulator model never replaces a real one
 

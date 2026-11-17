@@ -13,7 +13,7 @@
 // What to expect (PiEEG's own notes and the literature): left / centre / right is dependable, up / down is
 // weaker and blinks get in the way, fine pointing is not possible. The Quest 3 has no eye tracker, so this
 // is the only gaze signal it has.
-export const H_POS = [6, 7], H_NEG = [0, 1], V_POS = [2, 3, 4, 5], V_NEG = [0, 1, 6, 7];
+import { groups } from './montage.js';   // which channels are temples / forehead, left / right
 
 export const GAZE_TARGETS = [
   { id: 'c', x: 0, y: 0 }, { id: 'l', x: -1, y: 0 }, { id: 'c', x: 0, y: 0 }, { id: 'r', x: 1, y: 0 }, { id: 'c', x: 0, y: 0 },
@@ -29,7 +29,7 @@ const sd = (a) => { if (a.length < 2) return 0; const m = mean(a); return Math.s
 /** h and v from the EOG value of every channel. `bad` (optional) leaves channels out of the averages. */
 export function eogFeatures(eog, bad) {
   const avg = (chs) => { let s = 0, n = 0; for (const ch of chs) if (!bad || !bad[ch]) { s += eog[ch]; n++; } return n ? s / n : NaN; };
-  return { h: avg(H_POS) - avg(H_NEG), v: avg(V_POS) - avg(V_NEG) };
+  return { h: avg(groups.rightTemples) - avg(groups.leftTemples), v: avg(groups.forehead) - avg(groups.temples) };
 }
 
 /** Where the calibration is at `t` seconds: the target index, whether the eyes are still moving, the dot position. */

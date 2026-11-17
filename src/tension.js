@@ -5,9 +5,11 @@
 // minute (relaxed face), the ceiling the highest level seen, which decays over two minutes so one hard clench
 // does not flatten everything after it. "Set range" replaces both with a measured relax / squeeze.
 // On above 0.6, off below 0.4. Over 20 Hz, blinks and eye movements do not count as tension.
+import { groups } from './montage.js';
+// The channels of each group come from the montage: temples hear the jaw, the forehead hears the brows.
 export const TENSION_GROUPS = [
-  { id: 'jaw', label: 'Jaw', channels: [0, 1, 6, 7], where: 'temples', cue: 'Clench your teeth' },
-  { id: 'brow', label: 'Brow', channels: [2, 3, 4, 5], where: 'forehead', cue: 'Raise your eyebrows' },
+  { id: 'jaw', label: 'Jaw', get channels() { return groups.temples; }, where: 'temples', cue: 'Clench your teeth' },
+  { id: 'brow', label: 'Brow', get channels() { return groups.forehead; }, where: 'forehead', cue: 'Raise your eyebrows' },
 ];
 const ON = 0.6, OFF = 0.4, MIN_SPAN = 3;          // the ceiling stays at least 3× the floor (µV RMS)
 const HZ = 10, FLOOR_S = 60, CEIL_TAU_S = 120;

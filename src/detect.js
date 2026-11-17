@@ -1,37 +1,51 @@
-// Event detectors on the filtered rings. The blink detector follows PiEEG's useBlink: peak-to-peak
-// over a 100 ms window polled at 40 Hz, adaptive baseline (median + MAD over ~3 s), duration gate
-// 60–600 ms, refractory 300 ms. Frontal channels on the XR mask are Ch3–Ch6 (indices 2..5).
+// Blink detector. A blink is a ~400 ms hump of 30–200 µV on the forehead (the eyelid and the eyes rolling up),
+// strongest above the eyes and weak on the temples. We read forehead − temples (from the montage), so whatever
+// is common to all electrodes (a noisy reference, hum, motion) cancels: in the first real tests the forehead
+// average alone counted 160+ blinks that never happened, while forehead − temples showed the real ones clean.
+// Polled at 20–40 Hz: the newest 100 ms are averaged (a blink is slow; this drops the muscle buzz and most of
+// theta), compared with the median of the last ~3 s (threshold 3.5 MAD, never below 15 µV, set on today's
+// recordings: it found the blinks that the analysis saw, where the old one counted 160+); a blink is a crossing that lasts 60–600 ms
+// (longer is a held gesture or movement), with 250 ms between blinks. Polarity does not matter.
 export class BlinkDetector {
-  constructor(fs, channels = [2, 3, 4, 5]) {
-    this.fs = fs; this.channels = channels; this.windowN = Math.round(fs * 0.1);
-    this.hist = []; this.histMax = 120;             // ~3 s at 40 Hz
-    this.count = 0; this.amplitude = 0; this.baseline = 0; this.threshold = 25; this.warmed = false;
-    this.above = false; this.aboveSince = 0; this.lastBlink = 0; this.lastPulse = 0;
+  constructor(fs, channels = [2, 3, 4, 5], minus = []) {
+    this.fs = fs; this.channels = channels; this.minus = minus; this.smoothN = Math.round(fs * 0.1);
+    this.hist = []; this.histMax = 90;
+    this.count = 0; this.amplitude = 0; this.baseline = 0; this.threshold = 15; this.warmed = false;
+    this.above = false; this.aboveSince = 0; this.lastBlink = 0; this.lastPulse = 0; this.peak = 0; this.value = 0;
   }
   reset() { this.hist = []; this.count = 0; this.above = false; this.warmed = false; this.lastBlink = 0; }
-  /** Call at ~40 Hz. Returns true on the poll where a blink is confirmed. */
-  poll(rings, nowMs) {
-    const n = Math.min(rings.count, this.windowN); if (n < this.windowN) return false;
-    let lo = Infinity, hi = -Infinity;
+  setChannels(channels, minus = []) { this.channels = channels; this.minus = minus; this.hist = []; this.warmed = false; this.above = false; }
+  _value(rings) {
+    const n = Math.min(rings.count, this.smoothN); let acc = 0;
     for (let i = 0; i < n; i++) {
-      let v = 0; for (const ch of this.channels) v += rings.filt[ch][rings.at(i)];
-      v /= this.channels.length; if (v < lo) lo = v; if (v > hi) hi = v;
+      const idx = rings.at(i);
+      let v = 0; for (const ch of this.channels) v += rings.filt[ch][idx]; v /= this.channels.length || 1;
+      if (this.minus.length) { let m = 0; for (const ch of this.minus) m += rings.filt[ch][idx]; v -= m / this.minus.length; }
+      acc += v;
     }
-    const p2p = hi - lo; this.amplitude = p2p;
-    this.hist.push(p2p); if (this.hist.length > this.histMax) this.hist.shift();
-    if (this.hist.length >= 32) {
-      const s = [...this.hist].sort((a, b) => a - b), med = s[s.length >> 1];
-      const mad = 1.4826 * [...this.hist].map((x) => Math.abs(x - med)).sort((a, b) => a - b)[s.length >> 1];
-      this.baseline = med; this.threshold = Math.max(25, med + Math.max(5 * mad, 8)); this.warmed = true;
+    return n ? acc / n : 0;
+  }
+  /** Call at 20–40 Hz. Returns true on the poll where a blink is confirmed. */
+  poll(rings, nowMs) {
+    if (rings.count < this.smoothN || !this.channels.length) return false;
+    const v = this._value(rings); this.value = v;
+    if (!this.above) { this.hist.push(v); if (this.hist.length > this.histMax) this.hist.shift(); }   // the baseline learns from the quiet
+    if (this.hist.length >= 30) {
+      const sorted = [...this.hist].sort((a, b) => a - b), med = sorted[sorted.length >> 1];
+      const mad = 1.4826 * [...this.hist].map((x) => Math.abs(x - med)).sort((a, b) => a - b)[this.hist.length >> 1];
+      this.baseline = med; this.threshold = Math.max(15, 3.5 * mad); this.warmed = true;
     }
     if (!this.warmed) return false;
-    const release = this.baseline + 0.6 * (this.threshold - this.baseline);
+    const d = Math.abs(v - this.baseline);
     let fired = false;
-    if (!this.above && p2p > this.threshold && nowMs - this.lastBlink > 300) { this.above = true; this.aboveSince = nowMs; }
-    else if (this.above && p2p < release) {
-      const dur = nowMs - this.aboveSince; this.above = false;
-      if (dur >= 60 && dur <= 600) { this.count++; this.lastBlink = nowMs; this.lastPulse = nowMs; fired = true; }
-    } else if (this.above && nowMs - this.aboveSince > 600) { this.above = false; }     // too long: muscle, not a blink
+    if (!this.above && d > this.threshold && nowMs - this.lastBlink > 250) { this.above = true; this.aboveSince = nowMs; this.peak = d; }
+    else if (this.above) {
+      this.peak = Math.max(this.peak, d);
+      if (d < this.threshold * 0.5) {
+        const dur = nowMs - this.aboveSince; this.above = false;
+        if (dur >= 60 && dur <= 600) { this.count++; this.lastBlink = nowMs; this.lastPulse = nowMs; this.amplitude = this.peak; fired = true; }
+      } else if (nowMs - this.aboveSince > 600) this.above = false;      // too long: a held gesture or movement
+    }
     return fired;
   }
   /** 1 for 150 ms after each blink, else 0 (handy for OSC). */
