@@ -17,14 +17,24 @@ test('the documentation montage gives the expected groups and labels', () => {
   assert.equal(inputAt('c_left'), 'Ref'); assert.equal(inputAt('c_right'), 'Bias');
 });
 
+test('the Alma prototype preset is the multimeter map of 2026-11-17', () => {
+  usePreset('alma-proto');
+  const site = (k) => montage.channels[k];
+  assert.deepEqual([site(0), site(6), site(2), site(3), site(1), site(5), site(4), montage.ref, site(7), montage.bias],
+    ['lt_low', 'lt_up', 'lf_out', 'lf_in', 'c_left', 'c_right', 'rf_in', 'rf_out', 'rt_up', 'rt_low']);   // E1 E7 E3 E4 E2 | E6 E5 Ref E8 Bias
+  assert.deepEqual(groups.forehead, [1, 2, 3, 4, 5]); assert.deepEqual(groups.leftTemples, [0, 6]); assert.deepEqual(groups.rightTemples, [7]);
+  assert.deepEqual(groups.leftForehead, [1, 2, 3]); assert.deepEqual(groups.rightForehead, [4, 5]); assert.deepEqual(groups.off, []);
+  usePreset('pieeg-docs');
+});
+
 test('a prototype wired differently: groups, labels and gaze follow the map', () => {
-  // ours (2026-11-17): Ref on the right forehead inner site, Bias on the lower right temple; centre discs are channels
+  // a made-up rewiring: Ref on a right brow disc, Bias on the lower right temple, the inner discs as channels
   let fired = 0; const off = onMontage(() => fired++);
   assert.ok(montageWarnings({ channels: ['lf_out', 'lf_in', 'c_left', 'c_right', 'rf_in', 'rf_out', 'rt_up', 'rt_low'], ref: 'lt_low', bias: 'lt_up' }).some((w) => /one side/.test(w)));
   const m = { preset: 'custom', name: 'Our prototype', channels: ['lt_low', 'lt_up', 'lf_out', 'lf_in', 'c_left', 'rf_out', 'rt_up', 'c_right'], ref: 'rf_in', bias: 'rt_low' };
   assert.deepEqual(setMontage(m), []);
   assert.equal(fired, 1); off();
-  assert.equal(XR_FACE[4].place, 'centre · left'); assert.equal(XR_FACE[7].place, 'centre · right');
+  assert.equal(XR_FACE[4].place, 'left forehead · inner'); assert.equal(XR_FACE[7].place, 'right forehead · inner');
   assert.deepEqual(groups.rightTemples, [6]);                 // only E7 is on a right temple now
   assert.deepEqual(groups.forehead, [2, 3, 4, 5, 7]);
   assert.deepEqual(TENSION_GROUPS[0].channels, [0, 1, 6]);    // jaw = the temple channels of this map

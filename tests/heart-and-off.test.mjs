@@ -1,4 +1,4 @@
-// Inputs with no disc (a mask with 8 discs and no centre pair) and the heart rate from the electrodes.
+// Inputs with no disc (a mask with fewer discs than inputs) and the heart rate from the electrodes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { groups, setMontage, usePreset, validateMontage, montageWarnings, XR_FACE, inputAt } from '../src/montage.js';
@@ -8,8 +8,7 @@ import { HeartFromEEG } from '../src/heartest.js';
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 function gauss(r) { let u = 0, v = 0; while (u === 0) u = r(); while (v === 0) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 
-// ours, as the multimeter found it so far: Ref on the right forehead inner disc, Bias on the lower right temple,
-// no centre discs; which two channels have no disc is a guess here (E3, E4)
+// a made-up mask with eight discs: Ref and Bias take two of them, so E3 and E4 have none
 const EIGHT_DISCS = { preset: 'custom', name: 'Eight discs', channels: ['lt_low', 'lt_up', '', '', 'rf_out', 'lf_out', 'rt_up', 'lf_in'], ref: 'rf_in', bias: 'rt_low' };
 
 test('a channel can be "not connected": left out of the groups, labelled, warned', () => {

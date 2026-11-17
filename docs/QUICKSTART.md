@@ -42,10 +42,14 @@ To check a mask:
 - **Without tools**: bridge the reference disc and one other disc with a strip of paper soaked in salt water,
   mask off the face. The channel of that other disc drops to about 1 µV and turns green in the app.
 
-A mask can have fewer discs than the board has inputs (ours has 8 discs and no centre pair, so with Ref and Bias on
-two of them, two channel inputs touch nothing). Set those inputs to **not connected**: they disappear from the 3D
-head, read *no disc* in Contact, and stay out of every average, of the reference check and of the counts (6/6
-instead of 8/8). A channel input that beeps on no disc is one of them.
+The PiEEG XR pad has ten discs, five per side, none on the nose: three along each brow (inner, middle, outer) and
+two down each temple. PiEEG's "centre" Ref and Bias are the two inner brow discs. Our prototype, checked with a
+multimeter, is wired differently: preset **Alma prototype** (wearer's left → right: temple low E1, temple up E7,
+brow outer E3, middle E4, inner E2 · brow inner E6, middle E5, outer **Ref**, temple up E8, temple low **Bias**).
+
+If a mask has fewer discs than the board has inputs, set the inputs that beep on no disc to **not connected**: they
+disappear from the 3D head, read *no disc* in Contact, and stay out of every average, of the reference check and of
+the counts (6/6 instead of 8/8).
 
 ## 5. Contact
 

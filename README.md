@@ -4,7 +4,8 @@ Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and 
 face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
 *Soul Charger* VR experience, but meant to send anything to anything: OSC, WebSocket, files.
 
-Status: **0.12**: everything for shows and installations: **markers and commands in** (OSC / UDP / WebSocket),
+Status: **0.12.1**: the ten sites placed as on the real PiEEG XR pad (five per side, none on the nose; the "centre" sites are the inner brow discs) and the **Alma prototype** electrode map, measured with a multimeter (Ref on the right outer brow disc, Bias on the lower right temple).
+**0.12**: everything for shows and installations: **markers and commands in** (OSC / UDP / WebSocket),
 **rules → events** (OSC, WebSocket, MIDI or webhook, with hold and cooldown), a **cue sheet**, **visitor mode**
 (presence, per-visitor baseline, safe outputs, a session per visitor, endless reconnect), **region outputs**, a
 **face joystick**, **MIDI out**, a **remote viewer** served by every WebSocket destination, **replay a session as

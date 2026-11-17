@@ -1,30 +1,33 @@
-// The montage: where each input of the board sits on the face. PiEEG's documentation draws one layout
-// (Ch1–Ch4 on the left, Ref and Bias in the centre, Ch5–Ch8 on the right), but a hand-built prototype can be
-// wired differently: ours had the reference on the right forehead and the bias on the lower right temple.
-// So the map is data, edited in the app (Home › Electrodes) and saved with the config.
+// The montage: where each input of the board sits on the face. The PiEEG XR face pad has ten discs, five per side
+// and none on the nose: from the nose out, three along the brow (inner, middle, outer) and two down the temple
+// (upper, lower). PiEEG's documentation puts Ref and Bias on the two inner discs ("centre forehead") and Ch1–Ch4 /
+// Ch5–Ch8 on the rest, but a hand-built prototype can be wired differently: ours, checked with a multimeter on
+// 2026-11-17, has the reference on the right outer forehead disc and the bias on the lower right temple (preset
+// "Alma prototype"). So the map is data, edited in the app (Home › Electrodes) and saved with the config.
 //
 // A site is a place on the mask; the montage says which input (E1…E8, Ref, Bias) is on each site.
-// A mask can have fewer discs than the board has inputs: ours has 8 discs and no centre pair, so with Ref and Bias
-// on two of them, two channel inputs have no disc at all. Those are "not connected" (site ''): they float, so they
-// are left out of every average, of the reference check, of the counts and of the 3D head.
+// The site ids come from 0.10 and stay (saved maps use them): lf_in / rf_in are the MIDDLE brow discs, c_left /
+// c_right the INNER ones, next to the nose.
+// A mask can also have fewer discs than the board has inputs: an input with no disc is "not connected" (site '').
+// It floats, so it is left out of every average, of the reference check, of the counts and of the 3D head.
 // Everything that depends on position asks the montage at use time: the labels, the 3D head, the blink
 // detector (forehead − temples), gaze (right temples − left temples), alpha asymmetry (right − left
 // forehead), the tension groups (temples = jaw, forehead = brow) and the gesture cells.
 import { CHANNELS } from './ble.js';
 
-// side: L / R as the wearer sees it · region: temple | forehead | centre · dir: where on the 3D head
-// (azimuth °, negative = screen left in the mirror view; elevation ° above the eye line)
+// side: L / R as the wearer sees it · region: temple | forehead · dir: where on the 3D head (azimuth °, negative =
+// screen left in the mirror view; elevation ° above the eye line), placed as on the real pad (photo 2026-11-17)
 export const SITES = [
-  { id: 'lt_low', label: 'left temple · lower', short: 'L temple low', side: 'L', region: 'temple', dir: { az: -46, el: 16 }, doc: { x: 255, y: 414 } },
-  { id: 'lt_up', label: 'left temple · upper', short: 'L temple up', side: 'L', region: 'temple', dir: { az: -45, el: 29 }, doc: { x: 240, y: 296 } },
-  { id: 'lf_out', label: 'left forehead · outer', short: 'L forehead out', side: 'L', region: 'forehead', dir: { az: -27, el: 34 }, doc: { x: 320, y: 190 } },
-  { id: 'lf_in', label: 'left forehead · inner', short: 'L forehead in', side: 'L', region: 'forehead', dir: { az: -11, el: 37 }, doc: { x: 447, y: 188 } },
-  { id: 'c_left', label: 'centre · left', short: 'centre L', side: 'L', region: 'centre', dir: { az: -4, el: 30 }, doc: { x: 627, y: 240 } },
-  { id: 'c_right', label: 'centre · right', short: 'centre R', side: 'R', region: 'centre', dir: { az: 4, el: 30 }, doc: { x: 835, y: 240 } },
-  { id: 'rf_in', label: 'right forehead · inner', short: 'R forehead in', side: 'R', region: 'forehead', dir: { az: 11, el: 37 }, doc: { x: 1017, y: 188 } },
-  { id: 'rf_out', label: 'right forehead · outer', short: 'R forehead out', side: 'R', region: 'forehead', dir: { az: 27, el: 34 }, doc: { x: 1145, y: 190 } },
-  { id: 'rt_up', label: 'right temple · upper', short: 'R temple up', side: 'R', region: 'temple', dir: { az: 45, el: 29 }, doc: { x: 1223, y: 296 } },
-  { id: 'rt_low', label: 'right temple · lower', short: 'R temple low', side: 'R', region: 'temple', dir: { az: 46, el: 16 }, doc: { x: 1208, y: 414 } },
+  { id: 'lt_low', label: 'left temple · lower', short: 'L temple low', side: 'L', region: 'temple', dir: { az: -47, el: 14 }, doc: { x: 255, y: 414 } },
+  { id: 'lt_up', label: 'left temple · upper', short: 'L temple up', side: 'L', region: 'temple', dir: { az: -44, el: 27 }, doc: { x: 240, y: 296 } },
+  { id: 'lf_out', label: 'left forehead · outer', short: 'L forehead out', side: 'L', region: 'forehead', dir: { az: -31, el: 34 }, doc: { x: 335, y: 186 } },
+  { id: 'lf_in', label: 'left forehead · middle', short: 'L forehead mid', side: 'L', region: 'forehead', dir: { az: -19, el: 37 }, doc: { x: 470, y: 170 } },
+  { id: 'c_left', label: 'left forehead · inner', short: 'L forehead in', side: 'L', region: 'forehead', dir: { az: -8, el: 37 }, doc: { x: 610, y: 186 } },
+  { id: 'c_right', label: 'right forehead · inner', short: 'R forehead in', side: 'R', region: 'forehead', dir: { az: 8, el: 37 }, doc: { x: 856, y: 186 } },
+  { id: 'rf_in', label: 'right forehead · middle', short: 'R forehead mid', side: 'R', region: 'forehead', dir: { az: 19, el: 37 }, doc: { x: 996, y: 170 } },
+  { id: 'rf_out', label: 'right forehead · outer', short: 'R forehead out', side: 'R', region: 'forehead', dir: { az: 31, el: 34 }, doc: { x: 1131, y: 186 } },
+  { id: 'rt_up', label: 'right temple · upper', short: 'R temple up', side: 'R', region: 'temple', dir: { az: 44, el: 27 }, doc: { x: 1226, y: 296 } },
+  { id: 'rt_low', label: 'right temple · lower', short: 'R temple low', side: 'R', region: 'temple', dir: { az: 47, el: 14 }, doc: { x: 1211, y: 414 } },
 ];
 export const SITE_BY_ID = Object.fromEntries(SITES.map((s) => [s.id, s]));
 export const INPUTS = [...Array.from({ length: CHANNELS }, (_, k) => `E${k + 1}`), 'Ref', 'Bias'];
@@ -32,6 +35,9 @@ export const NOT_CONNECTED = '';
 
 export const PRESETS = [
   { id: 'pieeg-docs', name: 'PiEEG XR documentation', channels: ['lt_low', 'lt_up', 'lf_out', 'lf_in', 'rf_in', 'rf_out', 'rt_up', 'rt_low'], ref: 'c_left', bias: 'c_right' },
+  // our prototype, multimeter 2026-11-17 (wearer's left → right): L temple low E1 · L temple up E7 · L brow outer E3,
+  // middle E4, inner E2 · R brow inner E6, middle E5, outer Ref · R temple up E8 · R temple low Bias
+  { id: 'alma-proto', name: 'Alma prototype', channels: ['lt_low', 'c_left', 'lf_out', 'lf_in', 'rf_in', 'c_right', 'lt_up', 'rt_up'], ref: 'rf_out', bias: 'rt_low' },
 ];
 export const PRESET_BY_ID = Object.fromEntries(PRESETS.map((p) => [p.id, p]));
 
