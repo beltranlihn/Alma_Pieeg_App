@@ -4,6 +4,9 @@
 // So the map is data, edited in the app (Home › Electrodes) and saved with the config.
 //
 // A site is a place on the mask; the montage says which input (E1…E8, Ref, Bias) is on each site.
+// A mask can have fewer discs than the board has inputs: ours has 8 discs and no centre pair, so with Ref and Bias
+// on two of them, two channel inputs have no disc at all. Those are "not connected" (site ''): they float, so they
+// are left out of every average, of the reference check, of the counts and of the 3D head.
 // Everything that depends on position asks the montage at use time: the labels, the 3D head, the blink
 // detector (forehead − temples), gaze (right temples − left temples), alpha asymmetry (right − left
 // forehead), the tension groups (temples = jaw, forehead = brow) and the gesture cells.
@@ -25,6 +28,7 @@ export const SITES = [
 ];
 export const SITE_BY_ID = Object.fromEntries(SITES.map((s) => [s.id, s]));
 export const INPUTS = [...Array.from({ length: CHANNELS }, (_, k) => `E${k + 1}`), 'Ref', 'Bias'];
+export const NOT_CONNECTED = '';
 
 export const PRESETS = [
   { id: 'pieeg-docs', name: 'PiEEG XR documentation', channels: ['lt_low', 'lt_up', 'lf_out', 'lf_in', 'rf_in', 'rf_out', 'rt_up', 'rt_low'], ref: 'c_left', bias: 'c_right' },
@@ -35,17 +39,19 @@ export const PRESET_BY_ID = Object.fromEntries(PRESETS.map((p) => [p.id, p]));
 export const XR_FACE = Array.from({ length: CHANNELS }, (_, ch) => ({ id: `Ch${ch + 1}`, place: '' }));
 
 export const montage = { preset: 'pieeg-docs', name: PRESETS[0].name, channels: [...PRESETS[0].channels], ref: PRESETS[0].ref, bias: PRESETS[0].bias };
-export const groups = { forehead: [], temples: [], leftForehead: [], rightForehead: [], leftTemples: [], rightTemples: [], left: [], right: [] };
+export const groups = { forehead: [], temples: [], leftForehead: [], rightForehead: [], leftTemples: [], rightTemples: [], left: [], right: [], connected: [], off: [] };
 const listeners = new Set();
 export const onMontage = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 
-/** Problems with a montage, as short sentences (empty = fine): every input on a site, no site twice. */
+/** Problems with a montage, as short sentences (empty = fine): Ref and Bias on a site, each channel on a site
+ *  or not connected, no site twice, at least two channels connected. */
 export function validateMontage(m) {
   const errs = [], chans = Array.isArray(m && m.channels) ? m.channels : [];
-  if (chans.length !== CHANNELS) errs.push(`It needs a site for each of the ${CHANNELS} channels.`);
+  if (chans.length !== CHANNELS) errs.push(`It needs an entry for each of the ${CHANNELS} channels.`);
   const all = [...chans.map((s, k) => [`E${k + 1}`, s]), ['Ref', m && m.ref], ['Bias', m && m.bias]];
-  all.forEach(([name, s]) => { if (!SITE_BY_ID[s]) errs.push(`${name} has no site.`); });
-  const seen = {}; all.forEach(([name, s]) => { if (s && seen[s] !== undefined) errs.push(`${seen[s]} and ${name} are both on ${SITE_BY_ID[s]?.label || s}.`); else seen[s] = name; });
+  all.forEach(([name, s], k) => { if (!SITE_BY_ID[s] && !(k < CHANNELS && s === NOT_CONNECTED)) errs.push(`${name} has no site.`); });
+  const seen = {}; all.forEach(([name, s]) => { if (s && seen[s] !== undefined) errs.push(`${seen[s]} and ${name} are both on ${SITE_BY_ID[s]?.label || s}.`); else if (s) seen[s] = name; });
+  if (chans.length === CHANNELS && chans.filter((s) => SITE_BY_ID[s]).length < 2) errs.push('At least two channels have to be connected.');
   return errs;
 }
 
@@ -53,6 +59,7 @@ export function validateMontage(m) {
 export function montageWarnings(m) {
   if (validateMontage(m).length) return [];
   const g = computeGroups(m), out = [];
+  if (g.off.length) out.push(`Not connected: ${g.off.map((ch) => `E${ch + 1}`).join(', ')} (left out of everything).`);
   if (!g.temples.length) out.push('No channel on a temple: gaze and jaw tension need them.');
   else if (!g.leftTemples.length || !g.rightTemples.length) out.push('Temples on one side only: gaze left / right needs both.');
   if (!g.forehead.length) out.push('No channel on the forehead: blinks, the bands and brow tension need it.');
@@ -61,13 +68,14 @@ export function montageWarnings(m) {
 }
 
 function computeGroups(m) {
-  const at = (pred) => m.channels.map((s, ch) => (pred(SITE_BY_ID[s]) ? ch : -1)).filter((ch) => ch >= 0);
+  const at = (pred) => m.channels.map((s, ch) => (SITE_BY_ID[s] && pred(SITE_BY_ID[s]) ? ch : -1)).filter((ch) => ch >= 0);
   const front = (s) => s.region === 'forehead' || s.region === 'centre';
   return {
     forehead: at(front), temples: at((s) => s.region === 'temple'),
     leftForehead: at((s) => front(s) && s.side === 'L'), rightForehead: at((s) => front(s) && s.side === 'R'),
     leftTemples: at((s) => s.region === 'temple' && s.side === 'L'), rightTemples: at((s) => s.region === 'temple' && s.side === 'R'),
     left: at((s) => s.side === 'L'), right: at((s) => s.side === 'R'),
+    connected: at(() => true), off: m.channels.map((s, ch) => (SITE_BY_ID[s] ? -1 : ch)).filter((ch) => ch >= 0),
   };
 }
 
@@ -77,21 +85,27 @@ export function setMontage(m) {
   const next = { preset: m.preset || 'custom', name: m.name || (PRESET_BY_ID[m.preset]?.name ?? 'Custom'), channels: Array.isArray(m.channels) ? [...m.channels] : [], ref: m.ref, bias: m.bias };
   const errs = validateMontage(next); if (errs.length) return errs;
   const same = next.ref === montage.ref && next.bias === montage.bias && next.channels.every((s, k) => s === montage.channels[k]);
-  if (same && groups.forehead.length + groups.temples.length) { montage.preset = next.preset; montage.name = next.name; return []; }   // nothing moved: nothing to redo
+  if (same && groups.forehead.length + groups.temples.length) {   // nothing moved: only the name, nothing to redo
+    if (montage.preset !== next.preset || montage.name !== next.name) { montage.preset = next.preset; montage.name = next.name; notify(false); }
+    return [];
+  }
   Object.assign(montage, next);
   Object.assign(groups, computeGroups(montage));
-  montage.channels.forEach((s, ch) => { XR_FACE[ch].place = SITE_BY_ID[s].label; });
-  for (const fn of listeners) { try { fn(montage); } catch (e) { console.error(e); } }
+  montage.channels.forEach((s, ch) => { XR_FACE[ch].place = SITE_BY_ID[s] ? SITE_BY_ID[s].label : 'not connected'; });
+  notify(true);
   return [];
 }
+/** Listeners get (montage, moved): moved = the sites changed (not just the name). */
+function notify(moved) { for (const fn of listeners) { try { fn(montage, moved); } catch (e) { console.error(e); } } }
 export const usePreset = (id) => setMontage({ ...PRESET_BY_ID[id], preset: id });
 export const montageJSON = () => ({ preset: montage.preset, name: montage.name, channels: [...montage.channels], ref: montage.ref, bias: montage.bias });
-export const siteOfChannel = (ch) => SITE_BY_ID[montage.channels[ch]];
+export const siteOfChannel = (ch) => SITE_BY_ID[montage.channels[ch]];       // undefined when not connected
+export const isConnected = (ch) => !!SITE_BY_ID[montage.channels[ch]];
 export const refSite = () => SITE_BY_ID[montage.ref];
 export const biasSite = () => SITE_BY_ID[montage.bias];
 /** The input on a site ('E3', 'Ref', 'Bias' or ''), for the map drawing. */
 export function inputAt(siteId, m = montage) {
-  const ch = m.channels.indexOf(siteId); if (ch >= 0) return `E${ch + 1}`;
+  const ch = siteId ? m.channels.indexOf(siteId) : -1; if (ch >= 0) return `E${ch + 1}`;
   return m.ref === siteId ? 'Ref' : m.bias === siteId ? 'Bias' : '';
 }
 

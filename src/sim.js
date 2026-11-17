@@ -95,6 +95,8 @@ export class SimDevice {
           v += sgn * side * 120 * env;
         }
       }
+      // the temple arteries: a small pulse wave on the temples only (what the heart-from-electrodes estimate looks for)
+      if (ch <= 1 || ch >= 6) v += 7 * Math.max(0, Math.sin(2 * Math.PI * 1.15 * t)) ** 3;
       // slow drift of each electrode on its own (what the gaze calibration has to see through)
       const cd = this.chDrift[ch]; v += cd.a * Math.sin(2 * Math.PI * 0.012 * t + cd.ph);
       // gaze: the eye dipole, sustained while the eyes stay turned

@@ -11,11 +11,11 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 // (azimuth °, negative = screen left in the mirror view; elevation ° above the eye line). The pads move when
 // the map is edited, so the head always shows the mask as it is wired.
 import { montage, SITE_BY_ID, onMontage } from './montage.js';
-const channelDirs = () => montage.channels.map((s) => SITE_BY_ID[s].dir);
+const channelDirs = () => montage.channels.map((s) => (SITE_BY_ID[s] ? SITE_BY_ID[s].dir : null));   // null: not connected, no pad
 const auxDirs = () => [SITE_BY_ID[montage.ref].dir, SITE_BY_ID[montage.bias].dir];   // reference, bias
 const CUT_Y = -0.40;                                           // neck plane (head height = 2)
 const EYE_LINE = 0.18;
-const STATUS_COLOR = { good: '#4a8d6f', fair: '#e5b567', poor: '#e06c6c', railed: '#e06c6c', none: '#6d6d6d', wait: null, noisy: '#e06c6c', lost: '#e06c6c', flat: '#6d6d6d' };
+const STATUS_COLOR = { good: '#4a8d6f', fair: '#e5b567', poor: '#e06c6c', railed: '#e06c6c', none: '#6d6d6d', wait: null, noisy: '#e06c6c', lost: '#e06c6c', flat: '#6d6d6d', off: null };
 const SKIN = new THREE.Color('#4b4b4b');
 // heat LUT for activity (0 → 1): skin grey → blue → cyan → green → yellow → red → white, like a topomap
 const LUT_STOPS = ['#3a3f47', '#2f5f9e', '#4fc3e8', '#4a8d6f', '#e8c84b', '#e0645c', '#ffffff'].map((c) => new THREE.Color(c));
@@ -97,11 +97,15 @@ export class HeadView {
     this.head = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.05 }));
     this.scene.add(this.head);
     this.positions = geo.attributes.position.array;
+    // The scan is not centred on x = 0: its midline (nose tip, brows, skull all agree) sits about 0.02 to the left.
+    // Electrodes are placed from the midline, not the bounding-box centre, so left and right are mirror images.
+    { const p = this.positions; let best = -Infinity; this.midX = 0;
+      for (let i = 0; i < p.length; i += 3) if (p[i + 1] > -0.1 && p[i + 1] < 0.5 && p[i + 2] > best) { best = p[i + 2]; this.midX = p[i]; } }
 
     // electrode pads: find the skin point along each direction, lay a pad on it
     const ray = new THREE.Raycaster();
     const place = (d) => {
-      const v = dirVec(d), origin = v.clone().multiplyScalar(4).add(new THREE.Vector3(0, EYE_LINE, 0));
+      const v = dirVec(d), origin = v.clone().multiplyScalar(4).add(new THREE.Vector3(this.midX, EYE_LINE, 0));
       ray.set(origin, v.clone().negate());
       const hit = ray.intersectObject(this.head, false)[0];
       return hit ? { p: hit.point.clone(), n: hit.face.normal.clone().normalize() } : { p: origin.multiplyScalar(0.25), n: v };
@@ -121,10 +125,13 @@ export class HeadView {
 
   /** Pads for the 8 channels and the reference/bias, at the montage's sites (rebuilt when the map changes). */
   _buildPads() {
-    for (const o of [...this.pads, ...this.rings, ...(this.aux || [])]) { this.scene.remove(o); o.material.dispose(); }
+    for (const o of [...this.pads, ...this.rings, ...(this.aux || [])]) { if (!o) continue; this.scene.remove(o); o.material.dispose(); }
     this.pads = []; this.rings = []; this.aux = []; this.points = [];
     const place = this._place, padGeo = this._padGeo, ringGeo = this._ringGeo;
-    channelDirs().map(place).forEach(({ p, n: nrm }) => {
+    // indexed by channel; a channel with no disc keeps null in every array
+    channelDirs().forEach((dir) => {
+      if (!dir) { this.points.push(null); this.pads.push(null); this.rings.push(null); return; }
+      const { p, n: nrm } = place(dir);
       this.points.push(p);
       const pad = new THREE.Mesh(padGeo, new THREE.MeshStandardMaterial({ color: 0x6d6d6d, emissive: 0x000000, roughness: 0.4, metalness: 0.15 }));
       pad.position.copy(p).add(nrm.clone().multiplyScalar(0.006)); pad.lookAt(pad.position.clone().add(nrm)); this.scene.add(pad); this.pads.push(pad);
@@ -156,6 +163,7 @@ export class HeadView {
       if (this.mode === 'contact') { const st = quality ? quality[i].status : 'wait'; c = STATUS_COLOR[st] ? new THREE.Color(STATUS_COLOR[st]) : null; }
       else c = this._ramp(Math.max(0, Math.min(1, this.values[i])));
       cols.push(c);
+      if (!this.pads[i]) continue;
       const pc = c || new THREE.Color(0x6d6d6d); this.pads[i].material.color.set(pc); this.pads[i].material.emissive.set(c ? c.clone().multiplyScalar(0.25) : 0x000000);
     }
     // skin: a soft glow of each electrode's colour around its pad
@@ -164,7 +172,7 @@ export class HeadView {
       const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
       let wsum = 0, r = 0, g = 0, b = 0;
       for (let i = 0; i < 8; i++) {
-        const c = cols[i]; if (!c) continue;
+        const c = cols[i]; if (!c || !this.points[i]) continue;
         const p = this.points[i], dx = x - p.x, dy = y - p.y, dz = z - p.z, d2 = dx * dx + dy * dy + dz * dz;
         const w = Math.exp(-d2 / (2 * sigma * sigma)); if (w < 0.003) continue;
         wsum += w; r += w * c.r; g += w * c.g; b += w * c.b;
@@ -176,13 +184,14 @@ export class HeadView {
   }
   _paintActivity() {
     const vals = this.values, pos = this.positions, n = pos.length / 3, tmp = new THREE.Color();
-    if (this._lowY === undefined) this._lowY = Math.min(...this.points.map((p) => p.y));
-    for (let i = 0; i < 8; i++) { const c = lut(vals[i]); this.pads[i].material.color.set(c); this.pads[i].material.emissive.set(c.clone().multiplyScalar(0.3)); }
+    if (this._lowY === undefined) this._lowY = Math.min(...this.points.filter(Boolean).map((p) => p.y));
+    for (let i = 0; i < 8; i++) { if (!this.pads[i]) continue; const c = lut(vals[i]); this.pads[i].material.color.set(c); this.pads[i].material.emissive.set(c.clone().multiplyScalar(0.3)); }
     for (let v = 0; v < n; v++) {
       const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
       let wsum = 0, acc = 0, near = Infinity;
       for (let i = 0; i < 8; i++) {
-        const p = this.points[i], dx = x - p.x, dy = y - p.y, dz = z - p.z, d2 = dx * dx + dy * dy + dz * dz;
+        const p = this.points[i]; if (!p) continue;
+        const dx = x - p.x, dy = y - p.y, dz = z - p.z, d2 = dx * dx + dy * dy + dz * dz;
         if (d2 < near) near = d2;
         const w = 1 / (d2 + 0.0015);                       // inverse distance squared, softened at the electrode
         wsum += w; acc += w * vals[i];
@@ -195,6 +204,6 @@ export class HeadView {
     }
     this.head.geometry.attributes.color.needsUpdate = true;
   }
-  resetView() { this.camera.position.set(0.3, 0.55, 3.4); this.controls.target.set(0, 0.4, 0); this.controls.update(); }
+  resetView() { const x = this.midX || 0; this.camera.position.set(x, 0.55, 3.4); this.controls.target.set(x, 0.4, 0); this.controls.update(); }   // straight on: the map reads left / right without perspective
   _frame() { if (this.ready && this.container.isConnected && this.container.offsetParent !== null) { this.controls.update(); this.renderer.render(this.scene, this.camera); } requestAnimationFrame(this._frame); }
 }

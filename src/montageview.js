@@ -2,7 +2,7 @@
 // input of the board (E1…E8, Ref, Bias), the site it is wired to. Start from PiEEG's documentation or from what
 // is saved, change a site, see it on the drawing, Apply. Problems (two inputs on one site) are said in words and
 // block Apply. The way to find the real wiring: a multimeter on continuity, board pin ↔ disc.
-import { SITES, INPUTS, PRESETS, PRESET_BY_ID, montageJSON, setMontage, validateMontage, montageWarnings, inputAt } from './montage.js';
+import { SITES, INPUTS, PRESETS, PRESET_BY_ID, NOT_CONNECTED, montageJSON, setMontage, validateMontage, montageWarnings, inputAt } from './montage.js';
 
 const INPUT_COLOR = { Ref: '#e5b567', Bias: '#7fb2e8' };
 
@@ -19,7 +19,7 @@ export function mountMontageEditor(host) {
             <line class="mmap-mid" x1="733" y1="130" x2="733" y2="495"/>
             <g id="mmapSites"></g>
           </svg>
-          <div class="hint">Seen as in PiEEG's drawing (looking at the electrodes). Click a site to pick it for the selected input.</div>
+          <div class="hint">Seen as in PiEEG's drawing (looking at the electrodes). Click a site to pick it for the selected input. A site with · has no input: if your mask has no disc there, that is right. A channel whose pin beeps on no disc is "not connected".</div>
         </div>
         <div class="mmap-side">
           <div class="rows">
@@ -40,7 +40,8 @@ export function mountMontageEditor(host) {
   const siteOptions = SITES.map((s) => `<option value="${s.id}">${s.label}</option>`).join('');
   const inputRows = INPUTS.map((name, k) => {
     const row = document.createElement('div'); row.className = 'row clickable';
-    row.innerHTML = `<i class="swatch" style="background:${INPUT_COLOR[name] || 'var(--ink-2)'}"></i><div class="k"><b>${name}</b>${name === 'Ref' ? ' · reference' : name === 'Bias' ? ' · ground' : ''}</div><select style="width:190px">${siteOptions}</select>`;
+    const opts = k < 8 ? `<option value="${NOT_CONNECTED}">not connected (no disc)</option>${siteOptions}` : siteOptions;
+    row.innerHTML = `<i class="swatch" style="background:${INPUT_COLOR[name] || 'var(--ink-2)'}"></i><div class="k"><b>${name}</b>${name === 'Ref' ? ' · reference' : name === 'Bias' ? ' · ground' : ''}</div><select style="width:190px">${opts}</select>`;
     const sel = row.querySelector('select');
     sel.addEventListener('change', () => { setInput(k, sel.value); });
     row.addEventListener('click', (e) => { if (e.target !== sel) { selected = k; render(); } });
@@ -50,8 +51,9 @@ export function mountMontageEditor(host) {
   function getInput(k) { return k < 8 ? draft.channels[k] : k === 8 ? draft.ref : draft.bias; }
   function setInput(k, site) {
     // keep the map whole: if another input sat on that site, it takes this input's old site (a swap)
-    const old = getInput(k), other = INPUTS.findIndex((_, j) => j !== k && getInput(j) === site);
+    const old = getInput(k), other = site === NOT_CONNECTED ? -1 : INPUTS.findIndex((_, j) => j !== k && getInput(j) === site);
     const put = (j, s) => { if (j < 8) draft.channels[j] = s; else if (j === 8) draft.ref = s; else draft.bias = s; };
+    if (other >= 8 && old === NOT_CONNECTED) return;   // Ref and Bias always need a site: move them first
     put(k, site); if (other >= 0) put(other, old);
     draft.preset = 'custom'; draft.name = 'Custom'; selected = k; render();
   }

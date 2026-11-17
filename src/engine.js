@@ -15,10 +15,11 @@ import { Calibration } from './calibrate.js';
 import { GestureTrainer, GESTURES, faceFeatures, FEATURE_DIM } from './face.js';
 import { Gaze } from './gaze.js';
 import { Tension } from './tension.js';
+import { HeartFromEEG } from './heartest.js';
 
 // Which channels are forehead / temples / left / right comes from the montage (montage.js), never fixed numbers.
 import { groups, onMontage } from './montage.js';
-const isBad = (q) => !q || q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE;
+import { isBad } from './quality.js';
 
 function rmssdOf(rr) { if (rr.length < 3) return 0; let s = 0; for (let k = 1; k < rr.length; k++) { const d = rr[k].rr - rr[k - 1].rr; s += d * d; } return Math.sqrt(s / (rr.length - 1)); }
 
@@ -39,6 +40,9 @@ export class Engine extends EventTarget {
     this.gestures = new GestureTrainer();     // PiEEG Face Trainer
     this.gaze = new Gaze();                   // PiEEG Eye Track, EOG
     this.tension = new Tension();             // PiEEG artifact envelopes
+    this.heartEEG = new HeartFromEEG(this.fs);   // experimental: pulse from the electrodes
+    this.heartSource = 'auto';                // 'auto' (strap if present, else electrodes) | 'strap' | 'eeg'
+    this._heartTick = 0;
     this.faaNorm = new RollingNorm(60, 10);
     this._faa = { l: 0, r: 0, n: 0 }; this._beta = { ema: 0, base: 0, n: 0 };
     this.recorder = new Recorder();
@@ -60,7 +64,8 @@ export class Engine extends EventTarget {
     // A real map change moves the groups: what was measured on the old ones goes (gaze model, tension range, alpha
     // asymmetry and index baselines, the calibration's index ranges). Gesture models stay: they belong to inputs,
     // and the inputs are still the same electrodes.
-    onMontage(() => {
+    onMontage((m, moved) => {
+      if (!moved) return;
       this.blink.setChannels(groups.forehead, groups.temples);
       this.tension.reset(); this.tension.clearRange();
       if (this.gaze.ready || this.gaze.calibrating) this.gaze.reset();
@@ -98,10 +103,11 @@ export class Engine extends EventTarget {
       bands: Array.from({ length: CHANNELS }, () => ({ delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0, total: 0, dominant: 0 })),
       avg: { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0, total: 0, dominant: 0 },
       rel: { delta: 0, theta: 0, alpha: 0, beta: 0, gamma: 0 },
-      calm: 0, blinkCount: 0, blinkPulse: 0, blinkAmp: 0, contactGood: 0, contactOk: 0, rate: 0, refOk: 0, refCommon: 0,
+      calm: 0, blinkCount: 0, blinkPulse: 0, blinkAmp: 0, contactGood: 0, contactOf: CHANNELS, contactOk: 0, rate: 0, refOk: 0, refCommon: 0,
       idx: Object.fromEntries(INDICES.map((i) => [i.id, 0])),       // raw ratios (smoothed)
       idxNorm: Object.fromEntries(INDICES.map((i) => [i.id, 0.5])), // 0–1 against the last minute
-      heart: { bpm: 0, rmssd: 0, beat: 0, connected: 0 },
+      heart: { bpm: 0, rmssd: 0, beat: 0, connected: 0, source: 0 },     // source: 0 none · 1 strap · 2 electrodes
+      heartEEG: { bpm: 0, confidence: 0, locked: 0 },
       strap: Array.from({ length: 9 }, () => ({ bpm: 0, beat: 0, rmssd: 0, on: 0 })),   // index = slot, 0 unused
       result: [0, 0, 0], sessionElapsed: 0, sessionActive: 0,
       cal: { score: 0, ready: this.calib && this.calib.result ? 1 : 0 },
@@ -141,7 +147,7 @@ export class Engine extends EventTarget {
     if (kind === 'sim' && this.sourceKind !== 'sim') { this._realFace = this.faceModelJSON(); this._clearFaceModels(); }
     else if (kind !== 'sim' && this.sourceKind === 'sim' && this._realFace) { this._clearFaceModels(); this.loadFaceModel(this._realFace); this._realFace = null; }
     this.sourceKind = kind; this.gestures.resetLive();
-    this.tension.reset(); this.faaNorm.reset(); this._faa = { l: 0, r: 0, n: 0 }; this._beta = { ema: 0, base: 0, n: 0 }; this.faceReady = false;
+    this.tension.reset(); this.heartEEG.reset(); this.faaNorm.reset(); this._faa = { l: 0, r: 0, n: 0 }; this._beta = { ema: 0, base: 0, n: 0 }; this.faceReady = false;
     this.features = this._emptyFeatures(); this.quality = null;
     this._setState('connecting', kind === 'ble' ? 'Scanning for PiEEG…' : 'Starting simulator…');
     try {
@@ -239,7 +245,7 @@ export class Engine extends EventTarget {
     for (let ch = 0; ch < CHANNELS; ch++) { f.rms[ch] = rms(r, ch, this.fs); f.env[ch] = envelope(r, ch, this.fs); f.emg[ch] = this.emgEnv[ch].value; }
     const bad = this.quality ? this.quality.map(isBad) : null;
     // face: gesture probabilities (20 Hz) and gaze (20 Hz)
-    this.faceReady = !!faceFeatures(r.wide, (back) => r.at(back), r.count, this.faceX);
+    this.faceReady = !!faceFeatures(r.wide, (back) => r.at(back), r.count, this.faceX, bad);
     const probs = this.gestures.predict(this.faceReady ? this.faceX : null);
     for (const g of GESTURES) {
       f.face[g.id] = probs[g.id];
@@ -268,7 +274,7 @@ export class Engine extends EventTarget {
         f.bands[ch] = this.fft.bandPowers();
       }
       let used = 0;
-      for (const ch of groups.forehead) { const q = this.quality && this.quality[ch]; if (q && (q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE)) continue; for (const b of BANDS) avg[b.id] += f.bands[ch][b.id]; avg.total += f.bands[ch].total; avg.dominant += f.bands[ch].dominant; used++; }
+      for (const ch of groups.forehead) { const q = this.quality && this.quality[ch]; if (q && isBad(q)) continue; for (const b of BANDS) avg[b.id] += f.bands[ch][b.id]; avg.total += f.bands[ch].total; avg.dominant += f.bands[ch].dominant; used++; }
       if (used) { for (const b of BANDS) avg[b.id] /= used; avg.total /= used; avg.dominant /= used; }
       f.avg = avg;
       for (const b of BANDS) f.rel[b.id] = avg.total > 0 ? avg[b.id] / avg.total : 0;
@@ -281,7 +287,7 @@ export class Engine extends EventTarget {
         f.idxNorm[i.id] = own == null ? rolling : own;
       }
       f.calm = f.idx.calm;
-      if (this.calib.recording) this.calib.feed(f.bands, f.idx, this.quality && this.quality.map((q) => q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE));
+      if (this.calib.recording) this.calib.feed(f.bands, f.idx, this.quality && this.quality.map(isBad));
       f.cal.score = this.calib.score(f.bands); f.cal.ready = this.calib.result ? 1 : 0;
       // gesture recording (10 Hz, as PiEEG's capture)
       if (this.gestures.recording) {
@@ -321,10 +327,16 @@ export class Engine extends EventTarget {
       if (st && wall - st.lastSeen < 8000) { fs.on = 1; fs.bpm = st.bpm; fs.beat = st.lastBeat && now - st.lastBeat < 150 ? 1 : 0; fs.rmssd = rmssdOf(st.rr); }
       else { fs.on = 0; fs.bpm = 0; fs.beat = 0; fs.rmssd = 0; }
     }
-    // the main heart: slot 1 strap if alive, else the Bluetooth heart device
-    if (f.strap[1].on) { f.heart.bpm = f.strap[1].bpm; f.heart.rmssd = f.strap[1].rmssd; f.heart.beat = f.strap[1].beat; f.heart.connected = 1; }
-    else if (this.heart) { const h = this.heart; f.heart.bpm = h.bpm; f.heart.rmssd = h.rmssd; f.heart.beat = h.lastBeat && now - h.lastBeat < 150 ? 1 : 0; f.heart.connected = h.connected ? 1 : 0; }
-    else { f.heart.bpm = 0; f.heart.rmssd = 0; f.heart.beat = 0; f.heart.connected = 0; }
+    // the main heart: the source chosen on Home. Strap = slot 1 if alive, else the Bluetooth strap; electrodes =
+    // the experimental estimate (0 until it locks); auto = the strap when there is one, else the electrodes.
+    const he = this.heartEEG, fe = f.heartEEG;
+    fe.bpm = he.bpm; fe.confidence = he.confidence; fe.locked = he.locked ? 1 : 0;
+    const strapOn = f.strap[1].on || (this.heart && this.heart.connected);
+    const useEEG = this.heartSource === 'eeg' || (this.heartSource === 'auto' && !strapOn);
+    if (useEEG) { f.heart.bpm = he.locked ? Math.round(he.bpm) : 0; f.heart.rmssd = 0; f.heart.beat = he.beat(now); f.heart.connected = he.locked ? 1 : 0; f.heart.source = he.locked ? 2 : 0; }
+    else if (f.strap[1].on) { f.heart.bpm = f.strap[1].bpm; f.heart.rmssd = f.strap[1].rmssd; f.heart.beat = f.strap[1].beat; f.heart.connected = 1; f.heart.source = 1; }
+    else if (this.heart) { const h = this.heart; f.heart.bpm = h.bpm; f.heart.rmssd = h.rmssd; f.heart.beat = h.lastBeat && now - h.lastBeat < 150 ? 1 : 0; f.heart.connected = h.connected ? 1 : 0; f.heart.source = h.connected ? 1 : 0; }
+    else { f.heart.bpm = 0; f.heart.rmssd = 0; f.heart.beat = 0; f.heart.connected = 0; f.heart.source = 0; }
     f.t = now;
     this._emit('features');
   }
@@ -336,14 +348,15 @@ export class Engine extends EventTarget {
     const silentMs = performance.now() - (this._lastSampleAt || this.startedAtPerf || performance.now());
     if (this.state === 'streaming' && silentMs > 5000 && !/reconnecting/i.test(this.statusText)) {
       if (!this._stalled) { this._stalled = true; this.quality = null; this.features.contactGood = 0; this.features.contactOk = 0; this._emit('quality'); }
-      this.statusText = `Connected, but no data for ${Math.round(silentMs / 1000)} s. Unplug the PiEEG box for 5 s, plug it back, then Connect.`;
+      this.statusText = `Connected, but no data for ${Math.round(silentMs / 1000)} s. Unplug the PiEEG box for 5 s, plug it back, then Connect. If it keeps happening, update its firmware (docs.pieeg.com › PiEEG XR › Service).`;
       this.features.rate = 0; this._emit('state'); return;
     }
-    this.quality = assessAll(this.rings, this.fs);
+    this.quality = assessAll(this.rings, this.fs, groups.off);
+    if (++this._heartTick % 3 === 0) this.heartEEG.update(this.rings, this.quality.map(isBad));   // about once a second
     const ref = this.quality.ref || { status: 'wait', common: 0 };
     this.features.refOk = ref.status === 'good' ? 1 : 0; this.features.refCommon = ref.common;
     const good = this.quality.filter((q) => q.status === STATUS.GOOD).length;
-    this.features.contactGood = good; this.features.contactOk = good === CHANNELS ? 1 : 0;
+    this.features.contactGood = good; this.features.contactOf = groups.connected.length; this.features.contactOk = good === groups.connected.length ? 1 : 0;
     const now = performance.now(), dt = (now - this._rate.t0) / 1000;
     if (dt >= 1) { this._rate.value = this._rate.samples / dt; this._rate.samples = 0; this._rate.t0 = now; }
     this.features.rate = this._rate.value;

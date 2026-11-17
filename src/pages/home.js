@@ -7,11 +7,11 @@ import { mountMontageEditor } from '../montageview.js';
 import { montage, refSite, biasSite, onMontage } from '../montage.js';
 import { BANDS } from '../fft.js';
 
-const STATUS_LABEL = { good: 'good', fair: 'fair', poor: 'poor', railed: 'at the converter limit', none: 'flat', wait: '…' };
+const STATUS_LABEL = { good: 'good', fair: 'fair', poor: 'poor', railed: 'at the converter limit', none: 'flat', wait: '…', off: 'no disc' };
 const REF_LABEL = { good: 'quiet', noisy: 'noisy', lost: 'lost', flat: 'no signal', wait: '…' };
-const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '' };
+const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '', off: '' };
 
-export function mountHome(root, { engine, ui }) {
+export function mountHome(root, { engine, ui, saveConfig }) {
   root.innerHTML = `
     <section class="home">
       <div class="home-face">
@@ -37,6 +37,11 @@ export function mountHome(root, { engine, ui }) {
         <div class="rows" id="straps"></div>
         <div class="hint" id="antHint"></div>
         <div class="rows"><div class="row"><div class="k">Bluetooth strap</div><div class="v"><button class="seg" id="hHeartBtn">Connect</button></div></div></div>
+        <div class="rows">
+          <div class="row"><div class="k">Heart from</div><div class="seg-group" id="hSource"><button class="seg" data-v="auto">Auto</button><button class="seg" data-v="strap">Strap</button><button class="seg" data-v="eeg">Electrodes</button></div></div>
+          <div class="row"><div class="k">Electrode estimate</div><div class="v" id="hEEG">—</div></div>
+        </div>
+        <div class="hint">Electrodes (experimental): the pulse of the temple arteries, when the mask presses well. It says a number only when the rhythm is clear; record a session with a strap on too to compare. Auto uses the strap when there is one.</div>
 
         <h2>Stream</h2>
         <div class="rows">
@@ -51,6 +56,7 @@ export function mountHome(root, { engine, ui }) {
 
   const $ = (id) => root.querySelector('#' + id);
   const face = new HeadView($('homeFace'));
+  if ((window.alma.flags || {}).probe) window.almaHead = face;   // the self-test probe reads the head
   let headMode = ui.headMode || 'contact';
   const smooth = new Float32Array(8);
   $('headMode').querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.v === headMode); b.addEventListener('click', () => { headMode = b.dataset.v; ui.headMode = headMode; $('headMode').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); face.mode = headMode === 'contact' ? 'contact' : 'value'; face.update(engine.quality); }); });
@@ -70,7 +76,7 @@ export function mountHome(root, { engine, ui }) {
     { id: 'found', label: 'Sensor connected', test: () => engine.state === 'streaming' },
     { id: 'rate', label: 'Streaming at 250 /s', test: () => engine.state === 'streaming' && engine.features.rate > 230 },
     { id: 'ref', label: 'Reference quiet', test: () => engine.quality && engine.quality.ref && engine.quality.ref.status === 'good', pending: () => !engine.quality || !engine.quality.ref || engine.quality.ref.status === 'wait', extra: () => engine.quality && engine.quality.ref && engine.quality.ref.status !== 'good' ? `${REF_LABEL[engine.quality.ref.status]} · ${engine.quality.ref.common.toFixed(0)} µV` : '' },
-    { id: 'contact', label: 'All electrodes on the skin', test: () => engine.quality && engine.quality.every((q) => q.status === STATUS.GOOD || q.status === STATUS.FAIR), pending: () => !engine.quality },
+    { id: 'contact', label: 'All electrodes on the skin', test: () => engine.quality && engine.quality.every((q) => q.status === STATUS.GOOD || q.status === STATUS.FAIR || q.status === STATUS.OFF), pending: () => !engine.quality },
     { id: 'blink', label: 'Blink test (blink 3 times)', test: () => engine.blink.count >= 3, extra: () => engine.blink.warmed ? `${engine.blink.count} seen` : '' },
   ];
   const checksEl = $('checks');
@@ -98,8 +104,9 @@ export function mountHome(root, { engine, ui }) {
     $('homeDisconnect').disabled = !engine.device;
     face.update(engine.quality, engine.quality ? engine.quality.ref : null);
     const nGood = engine.quality ? engine.quality.filter((q) => q.status === 'good').length : 0;
-    $('capHeadDot').className = 'dot ' + (streaming ? (nGood === 8 ? 'on' : 'warn') : '');
-    $('capHead').textContent = streaming ? `${nGood}/8 contact` : 'not connected';
+    const nOf = engine.features.contactOf;
+    $('capHeadDot').className = 'dot ' + (streaming ? (nGood === nOf ? 'on' : 'warn') : '');
+    $('capHead').textContent = streaming ? `${nGood}/${nOf} contact` : 'not connected';
     const f = engine.features, hconn = f.heart.connected || (engine.heart && engine.heart.connected);
     const hstate = hconn && f.heart.bpm > 0 ? 'beating' : hconn ? 'idle' : 'off';
     $('capHandDot').className = 'dot ' + (hstate === 'beating' ? 'on' : hstate === 'idle' ? 'warn' : '');
@@ -115,7 +122,8 @@ export function mountHome(root, { engine, ui }) {
       const r = contactRows[ch], s = q ? q[ch].status : 'wait';
       r.children[0].className = 'dot ' + STATUS_DOT[s];
       r.children[1].innerHTML = `<b>${e.id}</b> · ${e.place}`;
-      r.children[2].textContent = s === 'wait' ? '' : `${q[ch].rms.toFixed(0)} µV · ${STATUS_LABEL[s]}`;
+      r.classList.toggle('dim', s === STATUS.OFF);
+      r.children[2].textContent = s === 'wait' ? '' : s === STATUS.OFF ? STATUS_LABEL.off : `${q[ch].rms.toFixed(0)} µV · ${STATUS_LABEL[s]}`;
       if (s === STATUS.GOOD) good++;
     });
     // the reference: what every channel shares (it reads as all eight channels bad at once)
@@ -125,11 +133,13 @@ export function mountHome(root, { engine, ui }) {
     refRow.children[2].textContent = ref.status === 'wait' || !streaming ? '' : `${ref.common.toFixed(0)} µV common · ${REF_LABEL[ref.status]}`;
     const refHint = ref.status === 'noisy' ? `Every channel carries the same ${ref.common.toFixed(0)} µV: the reference (${refSite().label}) or the bias (${biasSite().label}) is not touching well. Press them against the skin; a drop of saline helps. Live › Average reference hides it meanwhile.`
       : ref.status === 'lost' ? `Most channels are at the converter limit: the reference (${refSite().label}) is off the skin.` : '';
-    $('homeContactSummary').textContent = !streaming ? '' : !q ? 'Reading…' : refHint || (good === CHANNELS ? 'All good.' : `${good}/${CHANNELS} good. Reseat the mask where it is grey or red.`);
+    $('homeContactSummary').textContent = !streaming ? '' : !q ? 'Reading…' : refHint || (good === engine.features.contactOf ? 'All good.' : `${good}/${engine.features.contactOf} good. Reseat the mask where it is grey or red.`);
     $('hDevice').textContent = engine.deviceName || '—';
     $('hRate').textContent = streaming ? `${engine.features.rate.toFixed(0)} /s` : '—';
     $('hPackets').textContent = streaming ? `${engine.stats.notifications} · ${engine.stats.lastLen} B` : '—';
     $('hUptime').textContent = streaming ? fmtDuration((Date.now() - engine.startedAt) / 1000) : '—';
+    const he = engine.features.heartEEG;
+    $('hEEG').textContent = !streaming ? '—' : he.locked ? `${Math.round(he.bpm)} bpm · confidence ${he.confidence.toFixed(2)}` : `searching · ${he.confidence.toFixed(2)}`;
     const hb = engine.heart; $('hHeartBtn').textContent = hb && hb.connected ? `${hb.bpm || '—'} bpm · ${hb.name} · disconnect` : 'Connect';
     renderStraps();
   }
@@ -137,6 +147,10 @@ export function mountHome(root, { engine, ui }) {
   $('homeSim').addEventListener('click', () => engine.connect('sim'));
   $('homeDisconnect').addEventListener('click', () => engine.disconnect());
   $('hFolder').addEventListener('click', () => window.alma.openSessionsFolder());
+  engine.heartSource = ui.heartSource || 'auto';
+  const paintSource = () => $('hSource').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === engine.heartSource));
+  $('hSource').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { engine.heartSource = b.dataset.v; ui.heartSource = b.dataset.v; saveConfig && saveConfig(); paintSource(); refresh(); }));
+  paintSource();
   $('hHeartBtn').addEventListener('click', () => (engine.heart && engine.heart.connected ? engine.disconnectHeart() : engine.connectHeart('ble')));
   $('antBtn').addEventListener('click', () => (engine.ant.state === 'open' || engine.ant.state === 'opening' ? engine.antStop() : engine.antStart()));
   function renderStraps() {

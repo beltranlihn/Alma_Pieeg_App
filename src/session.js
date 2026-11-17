@@ -25,6 +25,9 @@ export const FEATURE_COLUMNS = [
   { id: 'blink_count', get: (f) => f.blinkCount },
   { id: 'heart_bpm', get: (f) => f.heart.bpm },
   { id: 'heart_rmssd', get: (f) => f.heart.rmssd },
+  { id: 'heart_source', get: (f) => f.heart.source },
+  { id: 'heart_eeg_bpm', get: (f) => (f.heartEEG.locked ? f.heartEEG.bpm : 0) },   // logged next to heart_bpm to validate it
+  { id: 'heart_eeg_conf', get: (f) => f.heartEEG.confidence },
   { id: 'contact_good', get: (f) => f.contactGood },
   { id: 'dominant_hz', get: (f) => f.avg.dominant },
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ id: `strap${n}_bpm`, get: (f) => f.strap[n].bpm })),
@@ -67,6 +70,12 @@ export function recoveryTimes(s, hz = 10) {
 
 const WINDOW_S = 30, HZ = 10;
 
+/** The features-log column of a signal id (idx.calm → idx_calm), or null when the signal is not logged. */
+export function columnOf(signalId) {
+  const id = signalId === 'dominant' ? 'dominant_hz' : signalId.replace('.', '_');
+  return FEATURE_COLUMNS.some((c) => c.id === id) ? id : null;
+}
+
 export class Session {
   constructor() { this.reset(); this.results = [{ signal: 'idx.calm', method: 'change' }, { signal: 'idx.focus', method: 'mean' }, { signal: 'idx.relax', method: 'now' }]; }
   reset() { this.active = false; this.participant = ''; this.notes = ''; this.startedAt = 0; this.rows = []; this.live = [0, 0, 0]; this.summary = null; }
@@ -84,7 +93,7 @@ export class Session {
 
   /** Series of one signal over the log, 0–1 clamp (signals are read through the catalogue so any works). */
   _series(signalId, signalById) {
-    const col = FEATURE_COLUMNS.findIndex((c) => c.id === signalId.replace('.', '_'));
+    const col = FEATURE_COLUMNS.findIndex((c) => c.id === columnOf(signalId));
     const sig = signalById[signalId];
     if (col < 0 || !sig) return [];
     const [lo, hi] = sig.range, span = hi - lo || 1;
@@ -115,7 +124,8 @@ export class Session {
       if (!vals.length) continue;
       const n = Math.min(WINDOW_S * HZ, Math.floor(vals.length / 2)) || 1;
       const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
-      per[c.id] = { mean: +mean(vals).toFixed(4), start: +mean(vals.slice(0, n)).toFixed(4), end: +mean(vals.slice(-n)).toFixed(4), min: +Math.min(...vals).toFixed(4), max: +Math.max(...vals).toFixed(4) };
+      let lo = Infinity, hi = -Infinity; for (const v of vals) { if (v < lo) lo = v; if (v > hi) hi = v; }   // no spread: hours of rows exceed the argument limit
+      per[c.id] = { mean: +mean(vals).toFixed(4), start: +mean(vals.slice(0, n)).toFixed(4), end: +mean(vals.slice(-n)).toFixed(4), min: +lo.toFixed(4), max: +hi.toFixed(4) };
     }
     this.summary = {
       format: 'eeg-alma-center-summary:v1', participant: this.participant, notes: this.notes,

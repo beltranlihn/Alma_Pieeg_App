@@ -39,6 +39,9 @@ add('blink.amplitude', 'Blink · frontal peak-to-peak', 'Events', 'µV', [0, 400
 add('heart.bpm', 'Heart · beats per minute', 'Heart', 'bpm', [40, 140], (f) => f.heart.bpm);
 for (let s = 1; s <= 8; s++) { add(`strap${s}.bpm`, `Strap ${s} · bpm`, 'Heart straps (ANT+)', 'bpm', [40, 140], (f) => f.strap[s].bpm); add(`strap${s}.beat`, `Strap ${s} · beat pulse`, 'Heart straps (ANT+)', '0/1', [0, 1], (f) => f.strap[s].beat, 'event'); add(`strap${s}.on`, `Strap ${s} · present (1/0)`, 'Heart straps (ANT+)', '0/1', [0, 1], (f) => f.strap[s].on, 'event'); }
 add('heart.beat', 'Heart · beat pulse (1 for 150 ms)', 'Heart', '0/1', [0, 1], (f) => f.heart.beat, 'event');
+add('heart.source', 'Heart · source now (0 none · 1 strap · 2 electrodes)', 'Heart', '0/1/2', [0, 2], (f) => f.heart.source, 'event');
+add('heart.eeg.bpm', 'Heart from the electrodes · bpm (experimental, 0 until it locks)', 'Heart', 'bpm', [40, 140], (f) => (f.heartEEG.locked ? f.heartEEG.bpm : 0));
+add('heart.eeg.confidence', 'Heart from the electrodes · confidence 0–1', 'Heart', '0–1', [0, 1], (f) => f.heartEEG.confidence);
 add('heart.rmssd', 'Heart · HRV (RMSSD, last minute)', 'Heart', 'ms', [0, 150], (f) => f.heart.rmssd);
 add('heart.connected', 'Heart · device connected (1/0)', 'Heart', '0/1', [0, 1], (f) => f.heart.connected, 'event');
 for (let k = 1; k <= 3; k++) add(`result${k}`, `Result ${k} · as configured in Live`, 'Session results', '', [-100, 100], (f) => f.result[k - 1]);

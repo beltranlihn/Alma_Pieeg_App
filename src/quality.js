@@ -12,7 +12,7 @@
 import { CHANNELS } from './ble.js';
 import { goertzelPower } from './dsp.js';
 
-export const STATUS = { GOOD: 'good', FAIR: 'fair', POOR: 'poor', RAILED: 'railed', NONE: 'none', WAIT: 'wait', NOISY: 'noisy' };
+export const STATUS = { GOOD: 'good', FAIR: 'fair', POOR: 'poor', RAILED: 'railed', NONE: 'none', WAIT: 'wait', NOISY: 'noisy', OFF: 'off' };
 export const FULL_SCALE_UV = 2.25e6;
 const RAIL_UV = 0.95 * FULL_SCALE_UV;
 // thresholds (µV), set against today's recordings and PiEEG's own reference dataset (see tests/quality.test.mjs)
@@ -28,19 +28,22 @@ function corr(a, b) { let sa = 0, sb = 0, sab = 0, saa = 0, sbb = 0; const n = a
  * Returns an array of per-channel { status, rms (own, µV), total, line (own hum), railed } with a .ref property:
  * { status: good | noisy | lost, common (µV), line (µV), corr }.
  */
-export function assessWindow(raw, filt, fs) {
-  const n = filt[0].length, chs = raw.length;
+export function assessWindow(raw, filt, fs, off = []) {
+  const n = filt[0].length, chs = raw.length, skip = new Set(off), use = [];
+  for (let ch = 0; ch < chs; ch++) if (!skip.has(ch)) use.push(ch);
   // each electrode has its own DC offset (tens or hundreds of mV): take it out first, or the median would jump
   // between channels with close offsets and the jumps would read as hum
   const rawMean = raw.map((r) => { let s = 0; for (let i = 0; i < n; i++) s += r[i]; return s / n; });
-  const common = new Float64Array(n), rawMed = new Float64Array(n), col = new Array(chs);
-  for (let i = 0; i < n; i++) {
-    for (let ch = 0; ch < chs; ch++) col[ch] = filt[ch][i]; common[i] = median(col);
-    for (let ch = 0; ch < chs; ch++) col[ch] = raw[ch][i] - rawMean[ch]; rawMed[i] = median(col);
+  // inputs with no disc (not connected on this mask) float: they stay out of the median and of every count
+  const common = new Float64Array(n), rawMed = new Float64Array(n), col = new Array(use.length);
+  for (let i = 0; i < n && use.length; i++) {
+    for (let j = 0; j < use.length; j++) col[j] = filt[use[j]][i]; common[i] = median(col);
+    for (let j = 0; j < use.length; j++) col[j] = raw[use[j]][i] - rawMean[use[j]]; rawMed[i] = median(col);
   }
   const out = [];
   let railedCount = 0;
   for (let ch = 0; ch < chs; ch++) {
+    if (skip.has(ch)) { out.push({ status: STATUS.OFF, rms: 0, total: 0, line: 0, railed: false }); continue; }
     let railed = false; for (let i = 0; i < n; i++) if (Math.abs(raw[ch][i]) > RAIL_UV) { railed = true; break; }
     const own = new Float64Array(n), rawOwn = new Float64Array(n);
     for (let i = 0; i < n; i++) { own[i] = filt[ch][i] - common[i]; rawOwn[i] = raw[ch][i] - rawMean[ch] - rawMed[i]; }
@@ -53,25 +56,25 @@ export function assessWindow(raw, filt, fs) {
     else status = STATUS.POOR;
     out.push({ status, rms: ownRms, total, line, railed });
   }
-  let cs = 0, cn = 0; for (let a = 0; a < chs; a++) for (let b = a + 1; b < chs; b++) { cs += corr(filt[a], filt[b]); cn++; }
+  let cs = 0, cn = 0; for (let a = 0; a < use.length; a++) for (let b = a + 1; b < use.length; b++) { cs += corr(filt[use[a]], filt[use[b]]); cn++; }
   const commonRms = rmsOf(common), commonLine = hum(Array.from(rawMed), fs), meanCorr = cn ? cs / cn : 0;
-  const flat = out.every((c) => c.status === STATUS.NONE);
-  const status = railedCount >= chs / 2 ? 'lost' : flat ? 'flat' : commonRms > LIMITS.refCommon || commonLine > LIMITS.refLine ? 'noisy' : 'good';
+  const flat = out.every((c) => c.status === STATUS.NONE || c.status === STATUS.OFF);
+  const status = railedCount >= use.length / 2 ? 'lost' : flat ? 'flat' : commonRms > LIMITS.refCommon || commonLine > LIMITS.refLine ? 'noisy' : 'good';
   out.ref = { status, common: commonRms, line: commonLine, corr: meanCorr };
   return out;
 }
 
-export function assessAll(rings, fs) {
+export function assessAll(rings, fs, off = []) {
   const { start, len } = rings.startOfLast(fs);
-  if (len < fs * 0.8) { const w = Array.from({ length: CHANNELS }, () => ({ status: STATUS.WAIT, rms: 0, total: 0, line: 0, railed: false })); w.ref = { status: 'wait', common: 0, line: 0, corr: 0 }; return w; }
+  if (len < fs * 0.8) { const w = Array.from({ length: CHANNELS }, (_, ch) => ({ status: off.includes(ch) ? STATUS.OFF : STATUS.WAIT, rms: 0, total: 0, line: 0, railed: false })); w.ref = { status: 'wait', common: 0, line: 0, corr: 0 }; return w; }
   const n = rings.size, raw = [], filt = [];
   for (let ch = 0; ch < CHANNELS; ch++) {
     const r = new Float64Array(len), f = new Float64Array(len);
     for (let i = 0; i < len; i++) { const k = (start + i) % n; r[i] = rings.raw[ch][k]; f[i] = rings.filt[ch][k]; }
     raw.push(r); filt.push(f);
   }
-  return assessWindow(raw, filt, fs);
+  return assessWindow(raw, filt, fs, off);
 }
 
 /** Channels that should be left out of averages right now. */
-export const isBad = (q) => !q || q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE;
+export const isBad = (q) => !q || q.status === STATUS.POOR || q.status === STATUS.RAILED || q.status === STATUS.NONE || q.status === STATUS.OFF;

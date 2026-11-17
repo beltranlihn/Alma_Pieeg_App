@@ -327,7 +327,7 @@ export function mountFace(root, { engine, ui, saveConfig }) {
   function refreshState() {
     const streaming = engine.state === 'streaming';
     $('faceEmpty').style.display = streaming ? 'none' : '';
-    $('faceStatus').innerHTML = streaming ? `<div class="dot on"></div>${engine.deviceName} · ${engine.features.contactGood}/8 contact` : `<div class="dot"></div>${engine.statusText}`;
+    $('faceStatus').innerHTML = streaming ? `<div class="dot on"></div>${engine.deviceName} · ${engine.features.contactGood}/${engine.features.contactOf} contact` : `<div class="dot"></div>${engine.statusText}`;
     renderGestures(); renderGazeSide(); renderTensionSide();
   }
   for (const ev of ['state', 'quality', 'calib', 'disconnected']) engine.addEventListener(ev, refreshState);

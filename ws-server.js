@@ -47,7 +47,7 @@ function originAllowed(origin) {
 }
 
 class Hub {
-  constructor() { this.servers = new Map(); }   // "host:port" → { server, clients:Set, error, host, port }
+  constructor({ retryMs = 5000 } = {}) { this.servers = new Map(); this.retryMs = retryMs; }   // "host:port" → { server, clients:Set, error, host, port }
   key(host, port) { return `${host || '0.0.0.0'}:${port}`; }
 
   /** Keep exactly these listeners open: [{ host, port }]. */
@@ -56,7 +56,7 @@ class Hub {
     for (const [k, s] of this.servers) if (!want.has(k)) this._close(k, s);
     for (const d of list) {
       const k = this.key(d.host, d.port), s = this.servers.get(k);
-      if (s && s.error) this._close(k, s);                      // a port that was taken: try again
+      if (s && s.error && Date.now() - s.errorAt >= this.retryMs) this._close(k, s);   // a port that was taken: try again, not more often than retryMs
       if (!this.servers.has(k)) this._open(k, d.host || '0.0.0.0', d.port);
     }
   }
@@ -82,7 +82,7 @@ class Hub {
       const drop = () => entry.clients.delete(socket);
       socket.on('close', drop); socket.on('error', drop);
     });
-    server.on('error', (e) => { entry.error = e.code === 'EADDRINUSE' ? `port ${port} is taken` : e.message; });
+    server.on('error', (e) => { entry.error = e.code === 'EADDRINUSE' ? `port ${port} is taken` : e.message; entry.errorAt = Date.now(); });
     server.listen(port, host);
     entry.server = server; this.servers.set(k, entry);
   }

@@ -32,7 +32,7 @@ function createWindow() {
     backgroundColor: '#111111', title: 'EEG Alma Center', autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      additionalArguments: process.argv.filter((a) => a.startsWith('--')),   // flags reach the preload
+      additionalArguments: [...process.argv.filter((a) => a.startsWith('--')), `--app-version=${app.getVersion()}`],   // flags and the version reach the preload
       contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false,
       backgroundThrottling: false,   // the scope and the BLE loop must not slow down when hidden
     },
@@ -99,6 +99,8 @@ ipcMain.handle('list-sessions', async () => {
   return out.sort((a, b) => b.mtime - a.mtime);
 });
 ipcMain.handle('open-sessions-folder', () => shell.openPath(sessionsDir()));
+// links from the About box: only web pages and e-mail, nothing that could run on this computer
+ipcMain.handle('open-external', (_e, url) => { const u = String(url); if (/^https:\/\/[^\s]+$/.test(u) || /^mailto:[^\s]+$/.test(u)) shell.openExternal(u); });
 // Sessions page: every saved session that has a summary (0.4 and later), newest first
 ipcMain.handle('sessions-index', async () => {
   const dir = sessionsDir(), out = [];

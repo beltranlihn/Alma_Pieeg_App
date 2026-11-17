@@ -1,5 +1,6 @@
 // Oscilloscope: 8 stacked traces on one canvas, drawn every animation frame from the ring buffers.
 import { CHANNELS } from './ble.js';
+import { isBad } from './quality.js';
 
 // Channel labels follow the montage (montage.js): Home › Electrodes says which site each input is on.
 export { XR_FACE } from './montage.js';
@@ -43,7 +44,7 @@ export class Scope {
     const step = Math.max(1, Math.floor(n / plotW));          // never draw more points than pixels
     let carRef = null;
     if (this.car && this.source !== 'raw' && n > 1) {          // average reference: minus the mean of the channels with contact
-      const use = []; for (let ch = 0; ch < CHANNELS; ch++) { const q = this.quality && this.quality[ch]; if (!q || !(q.status === 'poor' || q.status === 'railed' || q.status === 'none')) use.push(ch); }
+      const use = []; for (let ch = 0; ch < CHANNELS; ch++) if (!this.quality || !isBad(this.quality[ch])) use.push(ch);
       if (use.length >= 3) { carRef = new Float64Array(Math.ceil(n / step)); for (let i = 0, j = 0; i < n; i += step, j++) { const k = (start + i) % size; let s = 0; for (const ch of use) s += buf[ch][k]; carRef[j] = s / use.length; } }
     }
     for (let ch = 0; ch < CHANNELS; ch++) {
@@ -60,7 +61,7 @@ export class Scope {
       let mean = 0;
       if (this.source === 'raw') { for (let i = 0; i < n; i += step) mean += arr[(start + i) % size]; mean /= Math.ceil(n / step); }
       const gain = (laneH * 0.45) / this.scaleUv;
-      const bad = q && (q.status === 'poor' || q.status === 'railed' || q.status === 'none');
+      const bad = q && isBad(q);
       ctx.strokeStyle = bad ? this.colors.traceBad : (this.channelColors ? this.channelColors[ch] : this.colors.trace);
       ctx.lineWidth = this.lineWidth; ctx.beginPath();
       for (let i = 0, j = 0; i < n; i += step, j++) {

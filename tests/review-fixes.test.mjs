@@ -52,7 +52,7 @@ test('websocket: browser pages from other sites are refused; a taken port is ret
   assert.ok(!originAllowed('https://example.com')); assert.ok(!originAllowed('http://192.168.0.5'));
   const port = 20000 + Math.floor(Math.random() * 2000);
   const blocker = net.createServer().listen(port, '127.0.0.1'); await new Promise((r) => blocker.once('listening', r));
-  const hub = new Hub(); hub.sync([{ host: '127.0.0.1', port }]); await new Promise((r) => setTimeout(r, 100));
+  const hub = new Hub({ retryMs: 0 }); hub.sync([{ host: '127.0.0.1', port }]); await new Promise((r) => setTimeout(r, 100));
   assert.match(hub.stats()[0].error, /taken/);
   await new Promise((r) => blocker.close(r));
   hub.sync([{ host: '127.0.0.1', port }]); await new Promise((r) => setTimeout(r, 100));

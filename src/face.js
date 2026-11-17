@@ -55,13 +55,18 @@ function featuresOf(win, n, out, o) {
 }
 
 const _wins = Array.from({ length: CHANNELS }, () => new Float64Array(WINDOW_SAMPLES));
-/** The 40 features of the newest 200 ms of `ring` (an array of per-channel Float32Array rings), CAR first. */
-export function faceFeatures(ring, at, count, out = new Float32Array(FEATURE_DIM)) {
+/** The 40 features of the newest 200 ms of `ring` (an array of per-channel Float32Array rings), CAR first.
+ *  `bad` (optional, per channel): left out of the average, so one electrode off the skin does not spread its
+ *  noise into the other seven channels' features. */
+export function faceFeatures(ring, at, count, out = new Float32Array(FEATURE_DIM), bad = null) {
   if (count < WINDOW_SAMPLES) return null;
+  const use = []; for (let ch = 0; ch < CHANNELS; ch++) if (!bad || !bad[ch]) use.push(ch);
+  if (use.length < 2) { use.length = 0; for (let ch = 0; ch < CHANNELS; ch++) use.push(ch); }
   for (let s = 0; s < WINDOW_SAMPLES; s++) {
     const idx = at(WINDOW_SAMPLES - 1 - s);
-    let m = 0; for (let ch = 0; ch < CHANNELS; ch++) { const v = ring[ch][idx]; _wins[ch][s] = v; m += v; }
-    m /= CHANNELS; for (let ch = 0; ch < CHANNELS; ch++) _wins[ch][s] -= m;
+    for (let ch = 0; ch < CHANNELS; ch++) _wins[ch][s] = ring[ch][idx];
+    let m = 0; for (const ch of use) m += _wins[ch][s]; m /= use.length;
+    for (let ch = 0; ch < CHANNELS; ch++) _wins[ch][s] -= m;
   }
   for (let ch = 0; ch < CHANNELS; ch++) featuresOf(_wins[ch], WINDOW_SAMPLES, out, ch * FEATURES_PER_CHANNEL);
   return out;

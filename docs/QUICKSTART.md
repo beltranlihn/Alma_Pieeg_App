@@ -22,10 +22,12 @@ at the end.
 
 1. Power the box. Within a few metres of the PC.
 2. **Home › Connect PiEEG**. The app picks the first `PiEEG_XR` / IronBCI it sees. *Stream* should read 250 /s.
-3. If it says *Connected, but no data*: unplug the box for 5 s, plug it back, Connect again.
-4. Bluetooth goes through air, not well through a head: if samples per second drop when the mask is on, put the
+3. If it says *Connected, but no data*: unplug the box for 5 s, plug it back, Connect again. If it keeps
+   happening, update the box's firmware (PiEEG docs › PiEEG XR › Service).
+4. New to the app? **Tour** (top bar) walks through every panel; **About** has the licences and the safety notes.
+5. Bluetooth goes through air, not well through a head: if samples per second drop when the mask is on, put the
    box (or a USB Bluetooth adapter on an extension) in line of sight of the receiver.
-5. **Simulator** (Home) runs everything without a device.
+6. **Simulator** (Home) runs everything without a device.
 
 ## 4. Electrode map
 
@@ -39,6 +41,11 @@ To check a mask:
   E1 … E8, Bias, Ref), the other on each disc until it beeps.
 - **Without tools**: bridge the reference disc and one other disc with a strip of paper soaked in salt water,
   mask off the face. The channel of that other disc drops to about 1 µV and turns green in the app.
+
+A mask can have fewer discs than the board has inputs (ours has 8 discs and no centre pair, so with Ref and Bias on
+two of them, two channel inputs touch nothing). Set those inputs to **not connected**: they disappear from the 3D
+head, read *no disc* in Contact, and stay out of every average, of the reference check and of the counts (6/6
+instead of 8/8). A channel input that beeps on no disc is one of them.
 
 ## 5. Contact
 
@@ -61,6 +68,10 @@ Every channel is "its electrode minus the reference", so the app splits each one
   Avatar Foundation.
 - **Face**: facial gestures trained per person (after PiEEG Face Trainer), gaze left / centre / right from the EOG
   with nine dots (after PiEEG Eye Track), jaw and brow tension from the muscle envelope.
+- **Heart rate** (Home): an ANT+ USB stick or a Bluetooth strap. *Heart from* picks the source: *Auto* (the strap
+  when there is one), *Strap*, or *Electrodes*, an experimental estimate from the pulse at the temples. It says a
+  number only when several channels agree on a steady rhythm; in the first real recordings it mostly did not. For
+  art, never for health. To check it, record a session with a strap on too: the features file logs both.
 - **Sessions**: *Start session* (`R`), *Mark* (`M`), *End session*. Each session saves the raw samples (PiEEG's CSV
   layout), a features CSV at 10 Hz and a summary. The Sessions page shows a saved session whole and lays another
   over it.

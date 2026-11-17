@@ -9,6 +9,8 @@ import { mountSessions } from './pages/sessions.js';
 import { GESTURES } from './face.js';
 import { setMontage, montageJSON, onMontage } from './montage.js';
 import { mountCalibration } from './calview.js';
+import { mountTour } from './tour.js';
+import { mountAbout } from './about.js';
 
 const $ = (id) => document.getElementById(id);
 const engine = new Engine();
@@ -37,7 +39,7 @@ engine.addEventListener('face-model', () => { if (!(window.alma.flags || {}).sim
 // ── Pages ──
 { const v = (window.alma.flags || {}).view; if (v) { if (['gestures', 'gaze', 'tension'].includes(v)) ui.faceView = v; else ui.liveView = v; } }
 const pages = {
-  home: mountHome($('pageHome'), { engine, ui }),
+  home: mountHome($('pageHome'), { engine, ui, saveConfig }),
   live: mountLive($('pageLive'), { engine, ui, saveConfig }),
   face: mountFace($('pageFace'), { engine, ui, saveConfig }),
   sessions: mountSessions($('pageSessions'), { ui, saveConfig }),
@@ -56,7 +58,7 @@ document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click
 function refreshHeader() {
   const streaming = engine.state === 'streaming';
   $('hdrDot').className = 'dot ' + (streaming ? 'on' : engine.state === 'error' ? 'bad' : engine.state === 'connecting' ? 'warn' : '');
-  $('hdrText').textContent = streaming && !engine._stalled ? `${engine.deviceName} · ${engine.features.rate.toFixed(0)} /s · ${engine.features.contactGood}/8 contact${engine.recorder.active ? ' · recording' : ''}` : engine.statusText;
+  $('hdrText').textContent = streaming && !engine._stalled ? `${engine.deviceName} · ${engine.features.rate.toFixed(0)} /s · ${engine.features.contactGood}/${engine.features.contactOf} contact${engine.recorder.active ? ' · recording' : ''}` : engine.statusText;
   const bar = $('btnSession'); if (bar) bar.disabled = engine.state !== 'streaming';
   $('hdrConnect').textContent = engine.device ? 'Disconnect' : 'Connect PiEEG';
   $('hdrConnect').disabled = engine.state === 'connecting';
@@ -68,6 +70,9 @@ refreshHeader();
 const flags = window.alma.flags || {};
 if (flags.probe) window.almaEngine = engine;                    // the self-test probe reads the engine
 show(flags.page || ui.page || 'home');
+mountTour({ ui, saveConfig, flags });                             // Tour in the header; offered once on the first run
+mountAbout({ version: window.alma.version });                     // About in the header, or click the app name
+document.querySelector('header .brand span').textContent = window.alma.version.replace(/\.0$/, '');
 if (flags.sim && flags.session) setTimeout(() => { engine.startSession('test-person', 'self-test'); setTimeout(() => engine.endSession(), +flags.session * 1000); }, 2500);
 if (flags.sim) {
   window.almaEngine = engine;                                   // for --probe in the self-test

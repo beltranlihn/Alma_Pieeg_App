@@ -6,7 +6,7 @@ import { BandsView } from '../bands.js';
 import { INDICES } from '../indices.js';
 import { STATUS } from '../quality.js';
 import { PALETTES, PALETTE_BY_ID, DEFAULT_CUSTOM } from '../palettes.js';
-import { RESULT_METHODS, METHOD_BY_ID } from '../session.js';
+import { RESULT_METHODS, METHOD_BY_ID, columnOf } from '../session.js';
 import { SIGNALS, SIGNAL_BY_ID } from '../signals.js';
 import { INDEX_COLOR, signalColor, FAA_COLOR, BAND_COLOR } from '../colors.js';
 
@@ -16,7 +16,7 @@ const EXTRA = [
   { id: 'surge', label: 'Beta surge', formula: 'β above its last ~20 s', source: 'PiEEG Premeditatio Malorum · use Recovery in the results', color: BAND_COLOR.beta, norm: (f) => f.betaSurge, raw: (f) => f.betaSurge, rawLabel: '0–1' },
 ];
 
-const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '' };
+const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '', off: '' };
 
 export function mountLive(root, { engine, ui, saveConfig }) {
   root.innerHTML = `
@@ -226,7 +226,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
 
   // ── session ──
   const short = (s) => s.id.startsWith('idx.') ? s.label.split(' · ')[0] : s.id.startsWith('raw.') ? `${s.label.split(' · ')[0]} (raw)` : s.id.startsWith('rel.') ? `${s.label.split(' · ')[0]} relative` : s.id.startsWith('abs.') ? `${s.label.split(' · ')[0]} absolute` : s.label.split(' · ').slice(0, 2).join(' · ');
-  const signalChoices = SIGNALS.filter((s) => s.kind !== 'event' && !s.id.startsWith('result') && !s.id.startsWith('session') && !s.id.startsWith('ch') && !s.id.startsWith('strap')).map((s) => `<option value="${s.id}">${short(s)}</option>`).join('');
+  const signalChoices = SIGNALS.filter((s) => columnOf(s.id) && s.kind !== 'event' && !s.id.startsWith('result') && !s.id.startsWith('session') && !s.id.startsWith('ch') && !s.id.startsWith('strap')).map((s) => `<option value="${s.id}">${short(s)}</option>`).join('');
   const cfgEl = $('resultsCfg');
   engine.session.results = (ui.results || engine.session.results).map((r) => ({ ...r }));
   engine.session.results.forEach((r, k) => {

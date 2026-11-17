@@ -59,6 +59,9 @@ the Quest 3; Ref/Bias position matters little and can be reordered to the docs; 
 
 ## Next for interactive work (research 2026-11-17)
 
+The plan, in phases with effort and order, and what PiEEG's documentation adds (their WebSocket on 1616 for their
+Unity plugin, the VRChat parameters, LSL naming): **`docs/PLAN-FEATURES.md`**.
+
 From PiEEG's dashboard and other EEG software (OpenBCI GUI, Mind Monitor, Emotiv, Neurosity), what an artist or an
 installation would use first: **markers in** (keys and OSC/UDP from Unreal or TouchDesigner, stamped in the files);
 **region bundles** (frontal, left/right, temples as ready-made 0–1 outputs); **rules → events** (above X for N s,
