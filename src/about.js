@@ -44,7 +44,7 @@ export function mountAbout({ version }) {
       <h2><span>About<span class="count">EEG Alma Center ${version}</span></span><button class="seg" id="aboutClose">Close <kbd>Esc</kbd></button></h2>
       <div class="about-body">
         <div class="about-hero">
-          <div class="about-name">EEG Alma Center</div>
+          <div class="about-name"><img class="about-mark" src="assets/icon.svg" alt="">EEG Alma Center</div>
           <div class="about-by">by <b>Alma Digital Studio</b> · version ${version}</div>
           <p>A companion app for the PiEEG XR mask: it receives the signal over Bluetooth, checks the contact, calibrates
           to each person, shows it, records sessions and sends any signal out over OSC and WebSocket to TouchDesigner,

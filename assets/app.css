@@ -334,3 +334,9 @@ header .brand:hover { color: #ffffff; }
 #mRows .row.dim .mval { color: var(--ink-3); }
 
 .tour-card .tour-sim { margin: -6px 0 12px; color: var(--auto-ovr); font-size: var(--fs-1); }
+
+/* the app's mark (assets/icon.svg, made by tools/make-icon.py) */
+header .brand { display: flex; align-items: center; gap: 8px; }
+.brand-mark { width: 20px; height: 20px; display: block; }
+.about-name { display: flex; align-items: center; gap: 14px; }
+.about-mark { width: 48px; height: 48px; display: block; }

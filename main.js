@@ -35,6 +35,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1480, height: 920, minWidth: 1100, minHeight: 680,
     backgroundColor: '#111111', title: 'EEG Alma Center', autoHideMenuBar: true,
+    icon: path.join(__dirname, 'assets', 'icon.png'),           // the window and taskbar; the exe takes assets/icon.ico
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       additionalArguments: [...process.argv.filter((a) => a.startsWith('--')), `--app-version=${app.getVersion()}`],   // flags and the version reach the preload
