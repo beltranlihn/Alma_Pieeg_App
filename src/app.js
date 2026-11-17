@@ -83,7 +83,7 @@ refreshHeader();
 const flags = window.alma.flags || {};
 if (flags.probe) window.almaEngine = engine;                    // the self-test probe reads the engine
 show(flags.page || ui.page || 'home');
-mountTour({ ui, saveConfig, flags });                             // Tour in the header; offered once on the first run
+mountTour({ ui, saveConfig, flags, engine });                             // Tour in the header; offered once on the first run
 mountAbout({ version: window.alma.version });                     // About in the header, or click the app name
 document.querySelector('header .brand span').textContent = window.alma.version.replace(/\.0$/, '');
 if (flags.sim && flags.session) setTimeout(() => { engine.startSession('test-person', 'self-test'); setTimeout(() => engine.endSession(), +flags.session * 1000); }, 2500);

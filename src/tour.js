@@ -3,7 +3,10 @@
 // run. While it is open it holds the keyboard (→ / Enter next, ← back, Esc close), so C, M and R do not start a
 // calibration or a recording behind it. At the end it puts back the page and the views it found.
 //
-// A step: { page, view (Live or Face sub-tab), target, title, text }. target is { sel } (one element, or several
+// With nothing streaming, the panels would be grey boxes: the tour starts the simulator for itself (and says so on
+// the card) and stops it at the end, giving back the person's face model; a real PiEEG that streams is never touched.
+// The Mirror step plays a short demo of the face (the simulator has no trained gestures to show).
+// A step: { page, view (Live or Face sub-tab), target, title, text, demo }. target is { sel } (one element, or several
 // separated by commas: the box around all of them) or { heading } (an h2 of that page and everything under it
 // until the next h2). No target: the card sits in the middle.
 
@@ -42,7 +45,7 @@ const STEPS = [
     text: 'Teach it a few face gestures (blink, clench, smile, raise the brows): twice each, then it recognises them live. Each one can be sent out as a trigger.' },
   { page: 'face', view: 'gaze', target: { sel: '#fvGaze' }, title: 'Gaze',
     text: 'Nine dots to calibrate where the eyes look, from the eye muscles near the temples and the forehead: left, right, up and down, as numbers you can send.' },
-  { page: 'face', view: 'mirror', target: { sel: '#fvMirror' }, title: 'Mirror',
+  { page: 'face', view: 'mirror', demo: 'mirror', target: { sel: '#fvMirror' }, title: 'Mirror',
     text: 'A face that does what the mask reads: blinks, trained gestures, the gaze and muscle tension, live. The same values go out as ARKit blendshapes, the language of avatar rigs, to move a face in Unreal, Unity or TouchDesigner.' },
   { page: 'face', view: 'tension', target: { sel: '#fvTension' }, title: 'Tension',
     text: 'Jaw and brow tension 0–1, from muscle activity. Range asks the person to clench and relax, so 1 means their own strongest.' },
@@ -66,7 +69,7 @@ const STEPS = [
     text: 'Start the tour again any time from Tour in the header. The quick start guide (QUICKSTART.md) has the same in writing, with the mask and the safety notes.' },
 ];
 
-export function mountTour({ ui, saveConfig, flags = {} }) {
+export function mountTour({ ui, saveConfig, flags = {}, engine = null }) {
   const $ = (id) => document.getElementById(id);
   const btn = document.createElement('button'); btn.id = 'hdrTour'; btn.className = 'tour-start'; btn.textContent = 'Tour';
   btn.title = 'A walk through every panel';
@@ -75,7 +78,7 @@ export function mountTour({ ui, saveConfig, flags = {} }) {
   const block = document.createElement('div'); block.className = 'tour-block hidden';
   const hole = document.createElement('div'); hole.className = 'tour-hole hidden';
   const card = document.createElement('div'); card.className = 'tour-card hidden'; card.setAttribute('role', 'dialog'); card.setAttribute('aria-live', 'polite');
-  card.innerHTML = `<div class="tour-step"></div><h3></h3><p></p><div class="tour-actions"><button class="seg skip">Skip</button><button class="seg back">Back</button><button class="primary next">Next</button></div>`;
+  card.innerHTML = `<div class="tour-step"></div><h3></h3><p></p><div class="tour-sim hidden">Simulated data, so every panel has something to show. It stops when the tour ends.</div><div class="tour-actions"><button class="seg skip">Skip</button><button class="seg back">Back</button><button class="primary next">Next</button></div>`;
   document.body.append(block, hole, card);
 
   let k = -1, before = null;
@@ -126,6 +129,8 @@ export function mountTour({ ui, saveConfig, flags = {} }) {
     if (n < 0 || n >= STEPS.length) return close();
     k = n; const step = STEPS[k];
     goPage(step.page); goView(step.page, step.view);
+    document.dispatchEvent(new CustomEvent('tour-demo', { detail: { demo: step.demo || null } }));   // the Mirror face plays its demo
+    card.querySelector('.tour-sim').classList.toggle('hidden', !sim.started);
     card.querySelector('.tour-step').textContent = `${k + 1} / ${STEPS.length}`;
     card.querySelector('h3').textContent = step.title;
     card.querySelector('p').textContent = step.text;
@@ -136,8 +141,23 @@ export function mountTour({ ui, saveConfig, flags = {} }) {
     requestAnimationFrame(() => requestAnimationFrame(place));
   }
 
+  // the simulator, only when nothing streams (and only stopped if the tour started it)
+  const sim = { started: false, hadHeart: false };
+  function startSim() {
+    if (!engine || engine.device || engine.state === 'streaming' || engine.state === 'connecting') return;
+    sim.started = true; sim.hadHeart = !!engine.heart;
+    engine.connect('sim').then((ok) => { if (!ok) sim.started = false; });
+  }
+  async function stopSim() {
+    if (!sim.started || !engine) return;
+    sim.started = false;
+    if (engine.sourceKind === 'sim' && engine.device) { await engine.disconnect(); engine.endSimulation(); }
+    if (!sim.hadHeart && engine.heart && /simulat/i.test(engine.heartName || '')) await engine.disconnectHeart();
+  }
+
   function open(at = 0) {
     if (!block.classList.contains('hidden')) return go(at);
+    startSim();
     before = { page: currentPage(), live: currentView('views'), face: currentView('faceViews') };
     for (const el of [block, hole, card]) el.classList.remove('hidden');
     window.addEventListener('keydown', onKey, true); window.addEventListener('resize', place);
@@ -146,7 +166,9 @@ export function mountTour({ ui, saveConfig, flags = {} }) {
   function close() {
     for (const el of [block, hole, card]) el.classList.add('hidden');
     window.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', place);
+    document.dispatchEvent(new CustomEvent('tour-demo', { detail: { demo: null } }));
     if (before) { goPage('live'); goView('live', before.live); goPage('face'); goView('face', before.face); goPage(before.page); before = null; }
+    stopSim();
     k = -1; if (!ui.tourSeen) { ui.tourSeen = true; saveConfig(); }
   }
   function onKey(e) {

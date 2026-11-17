@@ -82,6 +82,18 @@ export class FaceMirror {
     this.controls.target.copy(this.focus); this.controls.minDistance = this.dist * 0.5; this.controls.maxDistance = this.dist * 2.2; this.controls.update();
   }
 
+  /** A ten-second loop of expressions and glances, for the guided tour (the simulator has no trained gestures). */
+  _demo(t) {
+    const w = {}, s = t % 10, g = { x: 0, y: 0, on: true }, part = (a, b) => (s >= a && s < b ? Math.sin(Math.PI * (s - a) / (b - a)) : 0);
+    w.mouthSmileLeft = w.mouthSmileRight = 0.85 * part(0, 1.6); w.cheekSquintLeft = w.cheekSquintRight = 0.3 * part(0, 1.6);
+    w.browInnerUp = w.browOuterUpLeft = w.browOuterUpRight = part(1.6, 3.2);
+    w.eyeBlinkLeft = part(3.2, 4.2); w.jawOpen = 0.55 * part(4.2, 5.8);
+    g.x = -0.85 * part(5.8, 7.4) + 0.85 * part(7.4, 9);
+    w.browDownLeft = w.browDownRight = 0.8 * part(9, 10); w.mouthPressLeft = w.mouthPressRight = 0.6 * part(9, 10);
+    const blink = (t % 3.3) < 0.15 ? 1 : 0; w.eyeBlinkLeft = Math.max(w.eyeBlinkLeft, blink); w.eyeBlinkRight = blink;
+    this.set(w, g);
+  }
+
   /** New target weights (ARKit names, the person's own sides) and gaze ({ x, y, on }). */
   set(weights, gaze) { for (const n of ARKIT) this.target[n] = weights[n] || 0; if (gaze) this.gaze = gaze; }
 
@@ -93,6 +105,7 @@ export class FaceMirror {
   _frame() {
     requestAnimationFrame(this._frame);
     if (!this.ready || !this.container.offsetParent) return;          // hidden page: nothing to draw
+    if (this.demo) this._demo(performance.now() / 1000);
     const inf = this.head.morphTargetInfluences;
     for (const n of ARKIT) {
       const t = this.target[n], cur = this.now[n];

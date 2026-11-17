@@ -430,6 +430,12 @@ export class Engine extends EventTarget {
     if (this.gaze.calibrating) { this.gaze.cancel(); this._emit('gaze', { type: 'cancelled' }); }
     if (this.tension.measuring) { this.tension.cancelRange(); this._emit('tension', { type: 'cancelled' }); }
   }
+  /** After a simulator run that someone else started (the guided tour): the person's face model comes back at once. */
+  endSimulation() {
+    if (this.sourceKind !== 'sim' || this.device) return;
+    if (this._realFace) { this._clearFaceModels(); this.loadFaceModel(this._realFace); this._realFace = null; }
+    this.sourceKind = null; this._emit('face-model');
+  }
   _clearFaceModels() { this.gestures.cancel(); this.gestures.clearAll(); this.gaze.reset(); this.tension.clearRange(); }
   /** The face model that belongs to a person (never the simulator's). */
   get savedFaceModel() { return this.sourceKind === 'sim' ? this._realFace : this.faceModelJSON(); }

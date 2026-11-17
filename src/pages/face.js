@@ -113,7 +113,7 @@ export function mountFace(root, { engine, ui, saveConfig }) {
   function refreshMirror() {
     if (!mirror || view !== 'mirror') return;
     const f = engine.features, trained = engine.gestures.models;
-    if (!mirror.override) mirror.set(f.arkit, { x: f.gaze.x, y: f.gaze.y, on: !!f.gaze.ready });
+    if (!mirror.override && !mirror.demo) mirror.set(f.arkit, { x: f.gaze.x, y: f.gaze.y, on: !!f.gaze.ready });
     DRIVERS.forEach(([, get, id, signed], i) => {
       const r = mRows[i], bar = r.querySelector('i'), val = r.querySelector('.mval');
       const v = id ? (trained[id] ? f.face[id] : null) : get(f);
@@ -124,10 +124,12 @@ export function mountFace(root, { engine, ui, saveConfig }) {
       val.textContent = v.toFixed(2);
     });
     const n = Object.keys(trained).length;
-    $('mState').textContent = `${n} gesture${n === 1 ? '' : 's'} trained · gaze ${f.gaze.ready ? 'on' : 'off'}`;
+    $('mState').textContent = mirror.demo ? 'demo for the tour' : `${n} gesture${n === 1 ? '' : 's'} trained · gaze ${f.gaze.ready ? 'on' : 'off'}`;
     $('mirrorNote').textContent = mirror.error || (mirror.ready ? '' : 'Loading the face…');
   }
   engine.addEventListener('features', refreshMirror);
+  // the guided tour: a short demo of the face while its step is on screen
+  document.addEventListener('tour-demo', (e) => { const on = e.detail && e.detail.demo === 'mirror'; if (on) ensureMirror(); if (mirror) mirror.demo = on; });
 
   // ── gestures list ──
   const list = $('gestureList');
