@@ -41,11 +41,23 @@ export const onMontage = (fn) => { listeners.add(fn); return () => listeners.del
 
 /** Problems with a montage, as short sentences (empty = fine): every input on a site, no site twice. */
 export function validateMontage(m) {
-  const errs = [], all = [...(m.channels || []), m.ref, m.bias];
-  if (!Array.isArray(m.channels) || m.channels.length !== CHANNELS) errs.push(`It needs a site for each of the ${CHANNELS} channels.`);
-  all.forEach((s, k) => { if (!SITE_BY_ID[s]) errs.push(`${INPUTS[k]} has no site.`); });
-  const seen = {}; all.forEach((s, k) => { if (s && seen[s] !== undefined) errs.push(`${INPUTS[seen[s]]} and ${INPUTS[k]} are both on ${SITE_BY_ID[s]?.label || s}.`); else seen[s] = k; });
+  const errs = [], chans = Array.isArray(m && m.channels) ? m.channels : [];
+  if (chans.length !== CHANNELS) errs.push(`It needs a site for each of the ${CHANNELS} channels.`);
+  const all = [...chans.map((s, k) => [`E${k + 1}`, s]), ['Ref', m && m.ref], ['Bias', m && m.bias]];
+  all.forEach(([name, s]) => { if (!SITE_BY_ID[s]) errs.push(`${name} has no site.`); });
+  const seen = {}; all.forEach(([name, s]) => { if (s && seen[s] !== undefined) errs.push(`${seen[s]} and ${name} are both on ${SITE_BY_ID[s]?.label || s}.`); else seen[s] = name; });
   return errs;
+}
+
+/** What a valid map leaves out, as sentences (it can still be applied). */
+export function montageWarnings(m) {
+  if (validateMontage(m).length) return [];
+  const g = computeGroups(m), out = [];
+  if (!g.temples.length) out.push('No channel on a temple: gaze and jaw tension need them.');
+  else if (!g.leftTemples.length || !g.rightTemples.length) out.push('Temples on one side only: gaze left / right needs both.');
+  if (!g.forehead.length) out.push('No channel on the forehead: blinks, the bands and brow tension need it.');
+  else if (!g.leftForehead.length || !g.rightForehead.length) out.push('Forehead on one side only: alpha asymmetry needs both.');
+  return out;
 }
 
 function computeGroups(m) {
@@ -61,8 +73,11 @@ function computeGroups(m) {
 
 /** Apply a montage (validated). Returns the problems if it is not valid, and then changes nothing. */
 export function setMontage(m) {
-  const next = { preset: m.preset || 'custom', name: m.name || (PRESET_BY_ID[m.preset]?.name ?? 'Custom'), channels: [...(m.channels || [])], ref: m.ref, bias: m.bias };
+  if (!m || typeof m !== 'object') return ['No map.'];
+  const next = { preset: m.preset || 'custom', name: m.name || (PRESET_BY_ID[m.preset]?.name ?? 'Custom'), channels: Array.isArray(m.channels) ? [...m.channels] : [], ref: m.ref, bias: m.bias };
   const errs = validateMontage(next); if (errs.length) return errs;
+  const same = next.ref === montage.ref && next.bias === montage.bias && next.channels.every((s, k) => s === montage.channels[k]);
+  if (same && groups.forehead.length + groups.temples.length) { montage.preset = next.preset; montage.name = next.name; return []; }   // nothing moved: nothing to redo
   Object.assign(montage, next);
   Object.assign(groups, computeGroups(montage));
   montage.channels.forEach((s, ch) => { XR_FACE[ch].place = SITE_BY_ID[s].label; });

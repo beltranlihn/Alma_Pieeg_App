@@ -15,7 +15,7 @@ const channelDirs = () => montage.channels.map((s) => SITE_BY_ID[s].dir);
 const auxDirs = () => [SITE_BY_ID[montage.ref].dir, SITE_BY_ID[montage.bias].dir];   // reference, bias
 const CUT_Y = -0.40;                                           // neck plane (head height = 2)
 const EYE_LINE = 0.18;
-const STATUS_COLOR = { good: '#4a8d6f', fair: '#e5b567', poor: '#e06c6c', railed: '#e06c6c', none: '#6d6d6d', wait: null, noisy: '#e06c6c', lost: '#e06c6c' };
+const STATUS_COLOR = { good: '#4a8d6f', fair: '#e5b567', poor: '#e06c6c', railed: '#e06c6c', none: '#6d6d6d', wait: null, noisy: '#e06c6c', lost: '#e06c6c', flat: '#6d6d6d' };
 const SKIN = new THREE.Color('#4b4b4b');
 // heat LUT for activity (0 → 1): skin grey → blue → cyan → green → yellow → red → white, like a topomap
 const LUT_STOPS = ['#3a3f47', '#2f5f9e', '#4fc3e8', '#4a8d6f', '#e8c84b', '#e0645c', '#ffffff'].map((c) => new THREE.Color(c));

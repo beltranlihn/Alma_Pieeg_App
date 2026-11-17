@@ -9,7 +9,7 @@ at the end.
 
 ## 1. Install
 
-- **EEG Alma Center Setup 0.10.0.exe** installs it; **EEG Alma Center 0.10.0.exe** (portable) runs without installing.
+- **EEG-Alma-Center-Setup-0.10.0.exe** installs it; **EEG-Alma-Center-0.10.0-portable.exe** runs without installing.
 - Windows 10 or 11 with Bluetooth Low Energy. No drivers. Nothing else to install.
 - Sessions are saved in `Documents\EEG Alma Center\sessions`.
 

@@ -55,7 +55,8 @@ export function assessWindow(raw, filt, fs) {
   }
   let cs = 0, cn = 0; for (let a = 0; a < chs; a++) for (let b = a + 1; b < chs; b++) { cs += corr(filt[a], filt[b]); cn++; }
   const commonRms = rmsOf(common), commonLine = hum(Array.from(rawMed), fs), meanCorr = cn ? cs / cn : 0;
-  const status = railedCount >= chs / 2 ? 'lost' : commonRms > LIMITS.refCommon || commonLine > LIMITS.refLine ? 'noisy' : 'good';
+  const flat = out.every((c) => c.status === STATUS.NONE);
+  const status = railedCount >= chs / 2 ? 'lost' : flat ? 'flat' : commonRms > LIMITS.refCommon || commonLine > LIMITS.refLine ? 'noisy' : 'good';
   out.ref = { status, common: commonRms, line: commonLine, corr: meanCorr };
   return out;
 }

@@ -2,7 +2,7 @@
 // input of the board (E1…E8, Ref, Bias), the site it is wired to. Start from PiEEG's documentation or from what
 // is saved, change a site, see it on the drawing, Apply. Problems (two inputs on one site) are said in words and
 // block Apply. The way to find the real wiring: a multimeter on continuity, board pin ↔ disc.
-import { SITES, INPUTS, PRESETS, PRESET_BY_ID, montageJSON, setMontage, validateMontage, inputAt } from './montage.js';
+import { SITES, INPUTS, PRESETS, PRESET_BY_ID, montageJSON, setMontage, validateMontage, montageWarnings, inputAt } from './montage.js';
 
 const INPUT_COLOR = { Ref: '#e5b567', Bias: '#7fb2e8' };
 
@@ -69,7 +69,8 @@ export function mountMontageEditor(host) {
       g.appendChild(c);
     }
     const errs = validateMontage(draft), same = JSON.stringify(draft) === JSON.stringify(montageJSON());
-    $('mmapMsg').textContent = errs.length ? errs.join(' ') : same ? 'This is the map in use.' : 'Not applied yet.';
+    const warn = montageWarnings(draft).join(' ');
+    $('mmapMsg').textContent = errs.length ? errs.join(' ') : `${same ? 'This is the map in use.' : 'Not applied yet. Applying it clears the gaze, the tension range and the calibration measured on the old map.'}${warn ? ' ' + warn : ''}`;
     $('mmapApply').disabled = !!errs.length || same;
   }
 

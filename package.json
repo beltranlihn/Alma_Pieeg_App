@@ -44,7 +44,11 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "EEG-Alma-Center-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "EEG-Alma-Center-${version}-portable.${ext}"
     },
     "asarUnpack": [
       "node_modules/usb/**"

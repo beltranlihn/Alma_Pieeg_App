@@ -8,7 +8,7 @@ import { montage, refSite, biasSite, onMontage } from '../montage.js';
 import { BANDS } from '../fft.js';
 
 const STATUS_LABEL = { good: 'good', fair: 'fair', poor: 'poor', railed: 'at the converter limit', none: 'flat', wait: '…' };
-const REF_LABEL = { good: 'quiet', noisy: 'noisy', lost: 'lost', wait: '…' };
+const REF_LABEL = { good: 'quiet', noisy: 'noisy', lost: 'lost', flat: 'no signal', wait: '…' };
 const STATUS_DOT = { good: 'on', fair: 'warn', poor: 'bad', railed: 'bad', none: '', wait: '' };
 
 export function mountHome(root, { engine, ui }) {
@@ -120,7 +120,7 @@ export function mountHome(root, { engine, ui }) {
     });
     // the reference: what every channel shares (it reads as all eight channels bad at once)
     const ref = q && q.ref ? q.ref : { status: 'wait', common: 0 };
-    refRow.children[0].className = 'dot ' + (ref.status === 'good' ? 'on' : ref.status === 'wait' ? '' : 'bad');
+    refRow.children[0].className = 'dot ' + (ref.status === 'good' ? 'on' : ref.status === 'wait' || ref.status === 'flat' ? '' : 'bad');
     refRow.querySelector('.site').textContent = refSite().label;
     refRow.children[2].textContent = ref.status === 'wait' || !streaming ? '' : `${ref.common.toFixed(0)} µV common · ${REF_LABEL[ref.status]}`;
     const refHint = ref.status === 'noisy' ? `Every channel carries the same ${ref.common.toFixed(0)} µV: the reference (${refSite().label}) or the bias (${biasSite().label}) is not touching well. Press them against the skin; a drop of saline helps. Live › Average reference hides it meanwhile.`

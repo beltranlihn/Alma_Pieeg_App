@@ -54,7 +54,15 @@ export class PiEEGDevice {
     try {
       for (let attempt = 1; ; attempt++) {
         try { this._status(`Connecting to ${this.name}…${attempt > 1 ? ` (try ${attempt} of 3)` : ''}`); await this._open(); break; }
-        catch (e) { if (attempt >= 3) { try { this.device.gatt.disconnect(); } catch (_) { /* gone */ } throw e; } await wait(700); }
+        catch (e) {
+          if (attempt >= 3 || this._stopping) {
+            this._stopping = true; this.device.removeEventListener('gattserverdisconnected', this._onDisconnect);   // no reconnect loop for a device the engine has dropped
+            try { this.device.gatt.disconnect(); } catch (_) { /* gone */ }
+            throw e;
+          }
+          await wait(700);
+        }
+        if (this._stopping) { try { this.device.gatt.disconnect(); } catch (_) { /* gone */ } throw new Error('Stopped while connecting'); }
       }
     } finally { this._starting = false; }
     this._status(`Streaming from ${this.name}`);
@@ -123,7 +131,11 @@ export class PiEEGDevice {
         this._status(`Signal lost · reconnecting (${attempt} of 5)…`);
         await wait(attempt === 1 ? 500 : 3000);
         if (this._stopping) return;
-        try { await this._open(); this.stats.reconnects = (this.stats.reconnects || 0) + 1; this._status(`Streaming from ${this.name}`); if (this.onReconnected) this.onReconnected(); return; }
+        try {
+          await this._open();
+          if (this._stopping) { try { this.device.gatt.disconnect(); } catch (_) { /* gone */ } return; }   // stopped while reconnecting
+          this.stats.reconnects = (this.stats.reconnects || 0) + 1; this._status(`Streaming from ${this.name}`); if (this.onReconnected) this.onReconnected(); return;
+        }
         catch (_) { /* next try */ }
       }
       if (!this._stopping) { this._status('Device disconnected'); if (this.onDisconnected) this.onDisconnected(); }

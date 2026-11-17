@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { montage, groups, setMontage, usePreset, validateMontage, XR_FACE, onMontage, inputAt, montageJSON } from '../src/montage.js';
+import { montage, groups, setMontage, usePreset, validateMontage, XR_FACE, onMontage, inputAt, montageJSON, montageWarnings } from '../src/montage.js';
 import { eogFeatures } from '../src/gaze.js';
 import { TENSION_GROUPS } from '../src/tension.js';
 import { assessWindow, FULL_SCALE_UV } from '../src/quality.js';
@@ -20,6 +20,7 @@ test('the documentation montage gives the expected groups and labels', () => {
 test('a prototype wired differently: groups, labels and gaze follow the map', () => {
   // ours (2026-11-17): Ref on the right forehead inner site, Bias on the lower right temple; centre discs are channels
   let fired = 0; const off = onMontage(() => fired++);
+  assert.ok(montageWarnings({ channels: ['lf_out', 'lf_in', 'c_left', 'c_right', 'rf_in', 'rf_out', 'rt_up', 'rt_low'], ref: 'lt_low', bias: 'lt_up' }).some((w) => /one side/.test(w)));
   const m = { preset: 'custom', name: 'Our prototype', channels: ['lt_low', 'lt_up', 'lf_out', 'lf_in', 'c_left', 'rf_out', 'rt_up', 'c_right'], ref: 'rf_in', bias: 'rt_low' };
   assert.deepEqual(setMontage(m), []);
   assert.equal(fired, 1); off();
@@ -80,4 +81,29 @@ test('blinks: forehead − temples counts a hump, ignores what all channels shar
   for (let i = 12; i < n; i += 12) { ring.count = i; if (det.poll(ring, (i / fs) * 1000)) seen.push(+(i / fs).toFixed(1)); }
   assert.equal(seen.length, 3, JSON.stringify(seen));
   seen.forEach((s, k) => assert.ok(Math.abs(s - blinksAt[k] - 0.3) < 0.4, `blink ${k} at ${s}`));
+});
+
+test('review fixes: same map is a no-op, a junk config is refused, warnings, messages name the right input', () => {
+  usePreset('pieeg-docs');
+  let fired = 0; const off = onMontage(() => fired++);
+  assert.deepEqual(setMontage({ ...montageJSON() }), []); assert.equal(fired, 0, 'applying the same map changes nothing');
+  assert.ok(setMontage({ channels: 5, ref: 'c_left', bias: 'c_right' }).length > 0);
+  assert.ok(setMontage(null).length > 0);
+  off();
+  const short = validateMontage({ channels: ['lt_low', 'lt_low'], ref: 'c_left', bias: 'c_right' });
+  assert.ok(short.some((e) => /E1 and E2/.test(e)), short.join(' '));
+  assert.ok(!short.some((e) => /Ref and/.test(e)));
+});
+
+test('no signal at all is not a quiet reference', () => {
+  const q = window(() => ({ common: 0, own: 0, offset: 0 }));
+  assert.equal(q.ref.status, 'flat');
+});
+
+test('a held gesture is not a blink when it ends', () => {
+  const fs = 250, n = fs * 12, filt = Array.from({ length: 8 }, () => new Float32Array(n)), r = rng(2);
+  for (let i = 0; i < n; i++) { const t = i / fs, held = t > 5 && t < 6.2 ? 80 : 0; for (let ch = 0; ch < 8; ch++) filt[ch][i] = 2 * gauss(r) + ([2, 3, 4, 5].includes(ch) ? held : 0); }
+  const det = new BlinkDetector(fs, [2, 3, 4, 5], [0, 1, 6, 7]), ring = { count: 0, filt, at: (b) => ring.count - 1 - b };
+  let count = 0; for (let i = 12; i < n; i += 12) { ring.count = i; if (det.poll(ring, (i / fs) * 1000)) count++; }
+  assert.equal(count, 0);
 });

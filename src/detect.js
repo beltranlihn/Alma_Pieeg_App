@@ -13,8 +13,8 @@ export class BlinkDetector {
     this.count = 0; this.amplitude = 0; this.baseline = 0; this.threshold = 15; this.warmed = false;
     this.above = false; this.aboveSince = 0; this.lastBlink = 0; this.lastPulse = 0; this.peak = 0; this.value = 0;
   }
-  reset() { this.hist = []; this.count = 0; this.above = false; this.warmed = false; this.lastBlink = 0; }
-  setChannels(channels, minus = []) { this.channels = channels; this.minus = minus; this.hist = []; this.warmed = false; this.above = false; }
+  reset() { this.hist = []; this.count = 0; this.above = false; this.latched = false; this.warmed = false; this.lastBlink = 0; }
+  setChannels(channels, minus = []) { this.channels = channels; this.minus = minus; this.hist = []; this.warmed = false; this.above = false; this.latched = false; }
   _value(rings) {
     const n = Math.min(rings.count, this.smoothN); let acc = 0;
     for (let i = 0; i < n; i++) {
@@ -38,13 +38,14 @@ export class BlinkDetector {
     if (!this.warmed) return false;
     const d = Math.abs(v - this.baseline);
     let fired = false;
+    if (this.latched) { if (d < this.threshold * 0.5) this.latched = false; return false; }   // a held gesture: wait for it to end
     if (!this.above && d > this.threshold && nowMs - this.lastBlink > 250) { this.above = true; this.aboveSince = nowMs; this.peak = d; }
     else if (this.above) {
       this.peak = Math.max(this.peak, d);
       if (d < this.threshold * 0.5) {
         const dur = nowMs - this.aboveSince; this.above = false;
         if (dur >= 60 && dur <= 600) { this.count++; this.lastBlink = nowMs; this.lastPulse = nowMs; this.amplitude = this.peak; fired = true; }
-      } else if (nowMs - this.aboveSince > 600) this.above = false;      // too long: a held gesture or movement
+      } else if (nowMs - this.aboveSince > 600) { this.above = false; this.latched = true; }      // too long: a held gesture or movement
     }
     return fired;
   }

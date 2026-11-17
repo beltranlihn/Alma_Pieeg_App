@@ -31,7 +31,7 @@ export function mountRouting(root, { engine, router, saveConfig }) {
     </section>`;
 
   const $ = (id) => root.querySelector('#' + id);
-  const signalOptions = SIGNAL_GROUPS.map((g) => `<optgroup label="${g}">${SIGNALS.filter((s) => s.group === g).map((s) => `<option value="${s.id}">${s.label}</option>`).join('')}</optgroup>`).join('');
+  const signalOptionsNow = () => SIGNAL_GROUPS.map((g) => `<optgroup label="${g}">${SIGNALS.filter((s) => s.group === g).map((s) => `<option value="${s.id}">${s.label}</option>`).join('')}</optgroup>`).join('');
   const destOptions = () => router.destinations.map((d) => `<option value="${d.id}">${d.name}</option>`).join('');
   const liveEls = new Map();
 
@@ -71,7 +71,7 @@ export function mountRouting(root, { engine, router, saveConfig }) {
     for (const m of router.mappings) {
       const r = document.createElement('div'); r.className = 'trow';
       r.innerHTML = `<div><input type="checkbox" ${m.enabled ? 'checked' : ''}></div>
-        <div><select class="sig">${signalOptions}</select></div>
+        <div><select class="sig">${signalOptionsNow()}</select></div>
         <div><input type="text" class="addr" value="${esc(m.address)}" spellcheck="false"></div>
         <div><select class="dest">${destOptions()}</select></div>
         <div><select class="type"><option value="f">float</option><option value="i">int</option></select></div>

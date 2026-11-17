@@ -57,7 +57,17 @@ export class Engine extends EventTarget {
     }, 100);
     this.fft = new FFT(256, this.fs);
     this.blink = new BlinkDetector(this.fs, groups.forehead, groups.temples);
-    onMontage(() => { this.blink.setChannels(groups.forehead, groups.temples); this.tension.reset(); this._emit('montage'); });
+    // A real map change moves the groups: what was measured on the old ones goes (gaze model, tension range, alpha
+    // asymmetry and index baselines, the calibration's index ranges). Gesture models stay: they belong to inputs,
+    // and the inputs are still the same electrodes.
+    onMontage(() => {
+      this.blink.setChannels(groups.forehead, groups.temples);
+      this.tension.reset(); this.tension.clearRange();
+      if (this.gaze.ready || this.gaze.calibrating) this.gaze.reset();
+      this._faa = { l: 0, r: 0, n: 0 }; this.faaNorm.reset(); for (const n of Object.values(this.norms)) n.reset();
+      if (this.calib.result || this.calib.running) this.resetCalibration();
+      this._emit('montage'); this._emit('face-model');
+    });
     this.norms = Object.fromEntries(INDICES.map((i) => [i.id, new RollingNorm(60, 10)]));
     this.calib = new Calibration(CHANNELS);   // per-person REST / ACTIVE calibration (PiEEG Avatar Foundation)
     this.device = null;

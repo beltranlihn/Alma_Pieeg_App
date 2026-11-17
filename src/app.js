@@ -28,8 +28,8 @@ function savedFace() {
   return engine.savedFaceModel ?? (cfg && cfg.face) ?? null;
 }
 const cfg = await window.alma.loadConfig();
+if (cfg && cfg.montage) { const errs = setMontage(cfg.montage); if (errs.length) console.warn('Saved electrode map ignored:', errs.join(' ')); }   // before the face model
 if (cfg) { Object.assign(ui, cfg.ui || {}); if (cfg.filters) Object.assign(engine.filters, cfg.filters); router.fromJSON(cfg.router); if (cfg.straps) engine.strapSlots = { ...cfg.straps }; if (cfg.face && !(window.alma.flags || {}).sim) engine.loadFaceModel(cfg.face); }
-if (cfg && cfg.montage) { const errs = setMontage(cfg.montage); if (errs.length) console.warn('Saved electrode map ignored:', errs.join(' ')); }
 onMontage(saveConfig);
 engine.addEventListener('ant', saveConfig);
 engine.addEventListener('face-model', () => { if (!(window.alma.flags || {}).sim && engine.sourceKind !== 'sim') saveConfig(); });   // a simulator model never replaces a real one
