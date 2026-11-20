@@ -1,4 +1,4 @@
-"""EEG Alma Center - print incoming OSC messages. Standard library only.
+"""Pieeg App - print incoming OSC messages. Standard library only.
 
 Usage:  python receive_osc.py [port]      (default port 7000)
 """

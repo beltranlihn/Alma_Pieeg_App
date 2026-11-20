@@ -1,4 +1,4 @@
-# EEG Alma Center - WebSocket DAT callbacks for TouchDesigner.
+# Pieeg App - WebSocket DAT callbacks for TouchDesigner.
 #
 # Paste into a Text DAT and set it as the Callbacks DAT of a
 # WebSocket DAT connected to ws://127.0.0.1:8765.

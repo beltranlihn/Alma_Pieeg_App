@@ -24,7 +24,7 @@
 		"enablehscroll" : 1,
 		"enablevscroll" : 1,
 		"devicewidth" : 0.0,
-		"description" : "EEG Alma Center: receive OSC on port 7000, send a marker to port 9001",
+		"description" : "Pieeg App: receive OSC on port 7000, send a marker to port 9001",
 		"digest" : "",
 		"tags" : "",
 		"style" : "",
@@ -33,7 +33,7 @@
 				"box" : 				{
 					"id" : "obj-10",
 					"maxclass" : "comment",
-					"text" : "EEG Alma Center - receive (OSC to port 7000)",
+					"text" : "Pieeg App - receive (OSC to port 7000)",
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 30.0, 15.0, 330.0, 20.0 ]

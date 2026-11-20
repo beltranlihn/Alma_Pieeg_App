@@ -1,6 +1,6 @@
-# EEG Alma Center - receiver examples
+# Pieeg App - receiver examples
 
-Ready-to-use examples for getting EEG and face signals from EEG Alma Center into your own software. Pick your tool, open its folder, follow the short README.
+Ready-to-use examples for getting EEG and face signals from Pieeg App into your own software. Pick your tool, open its folder, follow the short README.
 
 | Folder | For | What is inside |
 |---|---|---|

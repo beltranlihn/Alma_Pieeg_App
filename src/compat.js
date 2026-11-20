@@ -43,7 +43,7 @@ export class Compat {
   welcome() {
     const e = this.engine, f = e.filters;
     return JSON.stringify({ status: 'connected', sample_rate: e.fs, channels: 8, filter: { enabled: !!f.bandpass, lowcut: f.low, highcut: f.high, notch: f.notch },
-      recording: !!e.recorder.active, engine: 'EEG Alma Center', device: e.deviceName || '', spike_config: { enabled: !!f.hampel }, hampel_config: { enabled: !!f.hampel, window: 5, n_sigmas: 3 } });
+      recording: !!e.recorder.active, engine: 'Pieeg App', device: e.deviceName || '', spike_config: { enabled: !!f.hampel }, hampel_config: { enabled: !!f.hampel, window: 5, n_sigmas: 3 } });
   }
   syncListeners() { this.router.extraListeners = this.cfg.pieegWs ? [{ host: this.cfg.pieegHost, port: this.cfg.pieegPort, welcome: this.welcome() }] : []; this.router.syncOutputs(); }
   recordStatus(port) { window.alma.wsSend?.([{ host: this.cfg.pieegHost, port: port || this.cfg.pieegPort, text: JSON.stringify({ type: 'record_status', recording: !!this.engine.recorder.active }) }]); }

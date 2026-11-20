@@ -1,4 +1,4 @@
-// EEG Alma Center — preload. The only bridge between the page and the host.
+// Pieeg App — preload. The only bridge between the page and the host.
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 

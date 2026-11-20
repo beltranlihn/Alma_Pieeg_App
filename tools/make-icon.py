@@ -1,4 +1,4 @@
-# EEG Alma Center icon: a sibling of the VEATION mark (rounded square #262626, ink #E7E6E0, amber dot #F4B23A).
+# Pieeg App icon: a sibling of the VEATION mark (rounded square #262626, ink #E7E6E0, amber dot #F4B23A).
 # The head seen from above with its nose (the EEG topomap symbol), a brain wave inside, an amber electrode on the ring.
 # Geometry in a 100-unit box; rendered supersampled with Pillow; a bolder cut for 16–32 px.
 # usage: python tools/make-icon.py assets   → icon.ico (16–256), icon.png (512), icon-1024.png, icon.svg, icon-sheet.png
@@ -67,6 +67,6 @@ for s in sizes:
     sheet.paste(imgs[s], (x, 8), imgs[s]); z = imgs[s].resize((128, 128), Image.NEAREST); sheet.paste(z, (x, 160), z); x += 136
 sheet.save(os.path.join(out_dir, 'icon-sheet.png'))
 
-svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><title>EEG Alma Center</title><rect width="100" height="100" rx="22" fill="#262626"/><circle cx="50" cy="54" r="27" fill="none" stroke="#E7E6E0" stroke-width="7"/><path d="M43.5 28.2 L50 18.5 L56.5 28.2" fill="none" stroke="#E7E6E0" stroke-width="6.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M31 55.5 C35 55.5 37 45.5 42 45.5 C47 45.5 47 63.5 52 63.5 C57 63.5 57 47.5 62 47.5 C66 47.5 66 55.5 69 55.5" fill="none" stroke="#E7E6E0" stroke-width="6" stroke-linecap="round"/><circle cx="68.07" cy="33.93" r="9.4" fill="#262626"/><circle cx="68.07" cy="33.93" r="6.8" fill="#F4B23A"/></svg>'''
+svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><title>Pieeg App</title><rect width="100" height="100" rx="22" fill="#262626"/><circle cx="50" cy="54" r="27" fill="none" stroke="#E7E6E0" stroke-width="7"/><path d="M43.5 28.2 L50 18.5 L56.5 28.2" fill="none" stroke="#E7E6E0" stroke-width="6.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M31 55.5 C35 55.5 37 45.5 42 45.5 C47 45.5 47 63.5 52 63.5 C57 63.5 57 47.5 62 47.5 C66 47.5 66 55.5 69 55.5" fill="none" stroke="#E7E6E0" stroke-width="6" stroke-linecap="round"/><circle cx="68.07" cy="33.93" r="9.4" fill="#262626"/><circle cx="68.07" cy="33.93" r="6.8" fill="#F4B23A"/></svg>'''
 open(os.path.join(out_dir, 'icon.svg'), 'w', encoding='utf8').write(svg)
 print('ok')

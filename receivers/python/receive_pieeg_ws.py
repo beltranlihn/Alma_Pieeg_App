@@ -1,4 +1,4 @@
-"""EEG Alma Center - PiEEG-compatible WebSocket client. Standard library only.
+"""Pieeg App - PiEEG-compatible WebSocket client. Standard library only.
 
 Connects to ws://127.0.0.1:1616, prints the welcome message and the first
 5 sample frames, then sends {"mark": "python"} and closes.

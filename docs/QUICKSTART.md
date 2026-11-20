@@ -1,4 +1,4 @@
-# EEG Alma Center · quick start (PiEEG XR)
+# Pieeg App · quick start (PiEEG XR)
 
 A Windows desktop app that receives the PiEEG XR over Bluetooth, checks the contact, cleans and analyses the
 signal, calibrates per person, records sessions and sends any value to other software (Unreal, TouchDesigner,
@@ -9,9 +9,10 @@ at the end.
 
 ## 1. Install
 
-- **EEG-Alma-Center-Setup-0.10.0.exe** installs it; **EEG-Alma-Center-0.10.0-portable.exe** runs without installing.
+- **Pieeg-App-Setup-<version>.exe** installs it; **Pieeg-App-<version>-portable.exe** runs without installing. (Until 0.14 the
+  app was called EEG Alma Center; the new version picks up its settings and recordings.)
 - Windows 10 or 11 with Bluetooth Low Energy. No drivers. Nothing else to install.
-- Sessions are saved in `Documents\EEG Alma Center\sessions`.
+- Sessions are saved in `Documents\Pieeg App\sessions`.
 
 ## 2. Power and safety
 

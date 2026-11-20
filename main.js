@@ -1,4 +1,4 @@
-// EEG Alma Center — main process.
+// Pieeg App — main process.
 // Owns the window, the Bluetooth device chooser (Web Bluetooth needs a host handler in Electron),
 // the config file, the session files, the OSC/UDP sockets and the WebSocket listeners. BLE, DSP and drawing live in the renderer.
 'use strict';
@@ -24,17 +24,35 @@ let udp = null;
 const oscStats = { sent: 0, errors: 0 };
 
 function sessionsDir() {
-  const dir = path.join(app.getPath('documents'), 'EEG Alma Center', 'sessions');
+  const dir = path.join(appDocsDir(), 'sessions');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 function configPath() { return path.join(app.getPath('userData'), 'config.json'); }
+// Until 0.14 the app was "EEG Alma Center": its settings (AppData) and recordings (Documents) move to the new name
+// once, on the first start. If the recordings folder cannot be moved (open in another program, another drive), the
+// app keeps using the old one rather than losing sight of the sessions.
+const OLD_NAME = 'EEG Alma Center', NAME = 'Pieeg App';
+function appDocsDir() {
+  const docs = app.getPath('documents'), now = path.join(docs, NAME), old = path.join(docs, OLD_NAME);
+  return !fs.existsSync(now) && fs.existsSync(old) ? old : now;
+}
+function migrateOldName() {
+  try {
+    const cfgOld = path.join(app.getPath('appData'), OLD_NAME, 'config.json'), cfgNew = configPath();
+    if (!fs.existsSync(cfgNew) && fs.existsSync(cfgOld)) { fs.mkdirSync(path.dirname(cfgNew), { recursive: true }); fs.copyFileSync(cfgOld, cfgNew); }
+  } catch (_) { /* starts with default settings */ }
+  try {
+    const docs = app.getPath('documents'), old = path.join(docs, OLD_NAME), now = path.join(docs, NAME);
+    if (fs.existsSync(old) && !fs.existsSync(now)) fs.renameSync(old, now);
+  } catch (_) { /* appDocsDir() falls back to the old folder */ }
+}
 function safeName(name) { return String(name || 'session').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80); }
 
 function createWindow() {
   win = new BrowserWindow({
     width: 1480, height: 920, minWidth: 1100, minHeight: 680,
-    backgroundColor: '#111111', title: 'EEG Alma Center', autoHideMenuBar: true,
+    backgroundColor: '#111111', title: 'Pieeg App', autoHideMenuBar: true,
     icon: path.join(__dirname, 'assets', 'icon.png'),           // the window and taskbar; the exe takes assets/icon.ico
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -145,13 +163,13 @@ ipcMain.handle('config-load', async () => {
 ipcMain.handle('config-save', async (_e, json) => { await fs.promises.writeFile(configPath(), json, 'utf8'); return configPath(); });
 // Routing table as a file, to share a piece's wiring
 ipcMain.handle('routing-export', async (_e, json) => {
-  const dir = path.join(app.getPath('documents'), 'EEG Alma Center'); fs.mkdirSync(dir, { recursive: true });
+  const dir = appDocsDir(); fs.mkdirSync(dir, { recursive: true });
   const r = await dialog.showSaveDialog(win, { title: 'Export routing', defaultPath: path.join(dir, 'routing.json'), filters: [{ name: 'Routing', extensions: ['json'] }] });
   if (r.canceled || !r.filePath) return null;
   await fs.promises.writeFile(r.filePath, json, 'utf8'); return r.filePath;
 });
 ipcMain.handle('routing-import', async () => {
-  const r = await dialog.showOpenDialog(win, { title: 'Import routing', properties: ['openFile'], defaultPath: path.join(app.getPath('documents'), 'EEG Alma Center'), filters: [{ name: 'Routing', extensions: ['json'] }] });
+  const r = await dialog.showOpenDialog(win, { title: 'Import routing', properties: ['openFile'], defaultPath: appDocsDir(), filters: [{ name: 'Routing', extensions: ['json'] }] });
   if (r.canceled || !r.filePaths || !r.filePaths[0]) return null;
   return { path: r.filePaths[0], text: await fs.promises.readFile(r.filePaths[0], 'utf8') };
 });
@@ -203,5 +221,5 @@ ipcMain.handle('ant-stop', () => ant.stop());
 ipcMain.handle('ant-status', () => ant.getStatus());
 ant.onEvent((type, payload) => { if (win && !win.isDestroyed()) win.webContents.send('ant-event', { type, payload }); });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => { migrateOldName(); createWindow(); });
 app.on('window-all-closed', () => { wsHub.closeAll(); app.quit(); });

@@ -35,17 +35,17 @@ export function mountAbout({ version }) {
   const btn = document.createElement('button'); btn.id = 'hdrAbout'; btn.className = 'tour-start'; btn.textContent = 'About';
   const tour = document.getElementById('hdrTour'), status = document.querySelector('header .status');
   (tour ? tour.after.bind(tour) : status.before.bind(status))(btn);
-  const brand = document.querySelector('header .brand'); brand.title = 'About EEG Alma Center'; brand.style.cursor = 'pointer';
+  const brand = document.querySelector('header .brand'); brand.title = 'About Pieeg App'; brand.style.cursor = 'pointer';
 
   const el = document.createElement('div'); el.className = 'mmap-overlay about-overlay hidden';
   const link = (url, text) => `<a href="${url}" data-ext="${url}">${text || url.replace(/^https:\/\/|^mailto:/, '')}</a>`;
   el.innerHTML = `
-    <div class="mmap-panel about-panel" role="dialog" aria-label="About EEG Alma Center">
-      <h2><span>About<span class="count">EEG Alma Center ${version}</span></span><button class="seg" id="aboutClose">Close <kbd>Esc</kbd></button></h2>
+    <div class="mmap-panel about-panel" role="dialog" aria-label="About Pieeg App">
+      <h2><span>About<span class="count">Pieeg App ${version}</span></span><button class="seg" id="aboutClose">Close <kbd>Esc</kbd></button></h2>
       <div class="about-body">
         <div class="about-hero">
-          <div class="about-name"><img class="about-mark" src="assets/icon.svg" alt="">EEG Alma Center</div>
-          <div class="about-by">by <b>Alma Digital Studio</b> · version ${version}</div>
+          <div class="about-name"><img class="about-mark" src="assets/icon.svg" alt="">Pieeg App</div>
+          <div class="about-by">Developed by <b>Alma Digital Studio</b> · version ${version}</div>
           <p>A companion app for the PiEEG XR mask: it receives the signal over Bluetooth, checks the contact, calibrates
           to each person, shows it, records sessions and sends any signal out over OSC and WebSocket to TouchDesigner,
           Unreal, Unity, Max or a browser. Made for immersive and interactive art.</p>
@@ -64,13 +64,13 @@ export function mountAbout({ version }) {
         with a pacemaker or other implant without their physician's approval. Stop if the skin gets irritated.</p>
 
         <h3>Your data</h3>
-        <p>Everything stays on this computer. Recordings go to Documents › EEG Alma Center › sessions; the settings to the
+        <p>Everything stays on this computer. Recordings go to Documents › Pieeg App › sessions; the settings to the
         app's folder. Nothing is sent online. Signals leave the app only to the destinations you set in Routing. A recording
         holds the participant's name and notes as typed: ask people before recording them, and delete their files when
         asked.</p>
 
         <h3>Licence</h3>
-        <p>EEG Alma Center is free software under the MIT licence, © 2026 Alma Digital Studio.
+        <p>Pieeg App is free software under the MIT licence, © 2026 Alma Digital Studio.
         <button class="seg" id="aboutShowLicence">Show the licence</button></p>
         <pre class="about-licence hidden" id="aboutLicence">${MIT_TEXT}</pre>
 

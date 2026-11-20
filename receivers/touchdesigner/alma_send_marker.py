@@ -1,4 +1,4 @@
-# EEG Alma Center - send a marker from TouchDesigner.
+# Pieeg App - send a marker from TouchDesigner.
 #
 # Needs an OSC Out DAT (default name "oscout1") set to
 # Network Address 127.0.0.1, Network Port 9001.

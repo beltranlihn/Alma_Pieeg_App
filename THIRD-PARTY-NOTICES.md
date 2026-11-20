@@ -1,6 +1,6 @@
 # Third-party notices
 
-EEG Alma Center (MIT, © 2026 Alma Digital Studio) ships with or ports from:
+Pieeg App (MIT, © 2026 Alma Digital Studio) ships with or ports from:
 
 | Part | Licence | Use |
 |---|---|---|

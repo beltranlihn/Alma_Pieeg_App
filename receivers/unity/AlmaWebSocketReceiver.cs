@@ -1,4 +1,4 @@
-// EEG Alma Center - Unity WebSocket receiver. No packages needed.
+// Pieeg App - Unity WebSocket receiver. No packages needed.
 //
 // Add this to any GameObject. It connects to the app's WebSocket server,
 // reconnects on its own, and keeps the latest value of every address.

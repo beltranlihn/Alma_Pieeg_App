@@ -1,4 +1,4 @@
-"""EEG Alma Center - send a marker. Standard library only.
+"""Pieeg App - send a marker. Standard library only.
 
 Usage:  python send_marker.py scene 2
         python send_marker.py "breathing starts"

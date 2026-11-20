@@ -19,7 +19,7 @@ export function buildBDF(data, { fs = 250, participant = '', labels = null } = {
   let h = '';
   h += field('_BIOSEMI', 8);                                             // version: 0xFF then BIOSEMI (byte 0 set below)
   h += field(`X X X ${(participant || 'X').replace(/\s+/g, '_')}`, 80);
-  h += field(`Startdate ${p2(start.getDate())}-${MONTHS[start.getMonth()]}-${start.getFullYear()} X X EEG_Alma_Center PiEEG_XR`, 80);
+  h += field(`Startdate ${p2(start.getDate())}-${MONTHS[start.getMonth()]}-${start.getFullYear()} X X Pieeg_App PiEEG_XR`, 80);
   h += field(`${p2(start.getDate())}.${p2(start.getMonth() + 1)}.${p2(start.getFullYear() % 100)}`, 8);
   h += field(`${p2(start.getHours())}.${p2(start.getMinutes())}.${p2(start.getSeconds())}`, 8);
   h += field(256 * (ns + 1), 8);

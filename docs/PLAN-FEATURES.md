@@ -1,4 +1,4 @@
-# EEG Alma Center · feature plan (2026-11-17)
+# Pieeg App · feature plan (2026-11-17)
 
 **Status after 0.12 (2026-11-17):** done: 0.1–0.5, 1.1–1.5, 2.2–2.5 (EDF as BDF+, 24-bit), 3.1, 3.2. Not done:
 0.6 (blink check: needs a recording with every blink marked, press M on each), 1.6 (needs a session with a strap and

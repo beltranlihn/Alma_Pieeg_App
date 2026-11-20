@@ -1,4 +1,7 @@
-# EEG Alma Center
+# Pieeg App
+
+Repository: [github.com/beltranlihn/Alma_Pieeg_App](https://github.com/beltranlihn/Alma_Pieeg_App). Called *EEG Alma Center* until
+0.14: on its first start the new version moves the old settings and the `Documents\EEG Alma Center` recordings to the new name.
 
 Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and routes** biosignals. Built around the PiEEG XR
 face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
@@ -40,7 +43,7 @@ npm run dist           # Windows installer + portable exe in dist/
 2. Put the mask on, press **Connect PiEEG**. The host picks the first `PiEEG_XR` / IronBCI it sees.
 3. Watch **Contact**: every channel should be green within a second. Grey = no contact, red = hum or railed (reference lost).
 4. On **Live**, type the participant's name, **Start session** (or `R`), drop marks with `M`, **End session**. Three files land in
-   `Documents/EEG Alma Center/sessions/` as `name_YYYYMMDD_HHMMSS.raw.csv` (`timestamp, ch1..ch8` raw µV, `mark`; PiEEG's
+   `Documents/Pieeg App/sessions/` as `name_YYYYMMDD_HHMMSS.raw.csv` (`timestamp, ch1..ch8` raw µV, `mark`; PiEEG's
    layout, so PiEEG Studio opens it), `.features.csv` (one row per 100 ms: bands, indices, blinks, heart, contact) and
    `.summary.json` (participant, notes, duration, per-signal mean / start / end / min / max, the results).
 5. **Calibrate** (`C`, in the session bar) once the contact is green: 5 s to get ready, REST (eyes open, face relaxed), 5 s,

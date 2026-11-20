@@ -1,4 +1,4 @@
-# EEG Alma Center · UX / UI: where it stands and what makes it excellent
+# Pieeg App · UX / UI: where it stands and what makes it excellent
 
 2026-11-14. An honest review of the 0.2 screens against the VEATION design system and against the tools
 Beltrán's team already uses all day (Ableton, TouchDesigner, Unreal, Muse Integration). Each point says what is

@@ -92,7 +92,7 @@ export function mountLive(root, { engine, ui, saveConfig }) {
         <div class="rows" id="resultsCfg"></div>
         <h2>Last session</h2>
         <div class="rows" id="lastSession"><div class="row"><div class="k">—</div></div></div>
-        <div class="hint">Saved in Documents / EEG Alma Center / sessions.</div>
+        <div class="hint">Saved in Documents / Pieeg App / sessions.</div>
       </aside>
     </section>`;
 

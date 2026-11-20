@@ -1,4 +1,4 @@
-// EEG Alma Center - send a marker from Unity.
+// Pieeg App - send a marker from Unity.
 //
 // Sends the OSC message  /alma/mark "text"  over UDP to the app's input port
 // (127.0.0.1:9001 by default). The marker is stamped in the recording.

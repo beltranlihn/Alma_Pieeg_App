@@ -16,7 +16,7 @@ const STEPS = [
   { page: 'home', target: { sel: '#hdrDot, #hdrText, #hdrConnect' }, title: 'Connect',
     text: 'Connects to the PiEEG box over Bluetooth. Once it streams, this says the rate (250 /s) and how many electrodes have good contact. Power the box from a battery or the headset only, never from the mains.' },
   { page: 'home', target: { sel: '.session-bar' }, title: 'The session bar',
-    text: 'Participant and notes go into every file. Calibrate (C) measures this person at rest and in a task. Mark (M) drops a marker into the recording. Start session (R) records the raw signal and all the features to Documents › EEG Alma Center › sessions.' },
+    text: 'Participant and notes go into every file. Calibrate (C) measures this person at rest and in a task. Mark (M) drops a marker into the recording. Start session (R) records the raw signal and all the features to Documents › Pieeg App › sessions.' },
   { page: 'home', target: { sel: '.home-visual, .head-tools' }, title: 'The head',
     text: 'Each disc is an electrode, where the electrode map puts it. In Contact: green good, yellow fair, red poor, grey flat; the bigger metal disc is the reference. The band buttons paint the head with each band instead. Drag to turn it.' },
   { page: 'home', target: { heading: 'Ready to start' }, title: 'Ready to start',

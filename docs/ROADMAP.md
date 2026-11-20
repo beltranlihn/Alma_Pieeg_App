@@ -1,4 +1,4 @@
-# EEG Alma Center · roadmap
+# Pieeg App · roadmap
 
 2026-11-14. What comes next, in order. Most items port an open-source (MIT) piece of PiEEG's own software
 (`PiEEG-server/dashboard/src`) into our engine, so the data is computed once and can be shown, recorded and

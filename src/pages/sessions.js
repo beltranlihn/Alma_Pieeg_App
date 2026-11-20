@@ -1,6 +1,6 @@
 // Sessions: the saved sessions, newest first. Open one to see the whole session at once (the features log at
 // 10 Hz as lines, the marks, the results and per-signal numbers from the summary), and lay a second session
-// over it to compare. Reads the files in Documents / EEG Alma Center / sessions; nothing here writes.
+// over it to compare. Reads the files in Documents / Pieeg App / sessions; nothing here writes.
 import { SIGNAL_BY_ID } from '../signals.js';
 import { rawCsvToBDF } from '../bdf.js';
 import { METHOD_BY_ID } from '../session.js';

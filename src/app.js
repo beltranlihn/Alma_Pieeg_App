@@ -1,4 +1,4 @@
-// EEG Alma Center — renderer entry: the engine, the router, the config and the five pages.
+// Pieeg App — renderer entry: the engine, the router, the config and the five pages.
 import { Engine } from './engine.js';
 import { Router } from './router.js';
 import { mountHome } from './pages/home.js';

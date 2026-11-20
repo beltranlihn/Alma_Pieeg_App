@@ -72,7 +72,7 @@ class Hub {
     const server = http.createServer((req, res) => {
       const html = this.page && (req.url === '/' || req.url.startsWith('/?')) ? this.page() : null;
       if (html) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(html); return; }
-      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(`EEG Alma Center · WebSocket on ws://${req.headers.host || `${host}:${port}`}\n`);
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(`Pieeg App · WebSocket on ws://${req.headers.host || `${host}:${port}`}\n`);
     });
     server.on('upgrade', (req, socket) => {
       const key = req.headers['sec-websocket-key'];
