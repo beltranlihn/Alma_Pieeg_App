@@ -1,128 +1,220 @@
-# Pieeg App
+<p align="center"><img src="assets/icon.png" width="96" alt="Pieeg App"></p>
 
-Repository: [github.com/beltranlihn/Alma_Pieeg_App](https://github.com/beltranlihn/Alma_Pieeg_App). Called *EEG Alma Center* until
-0.14: on its first start the new version moves the old settings and the `Documents\EEG Alma Center` recordings to the new name.
+<h1 align="center">Pieeg App</h1>
 
-Desktop app (Windows first) that **receives, cleans, calibrates, visualizes and routes** biosignals. Built around the PiEEG XR
-face mask for Meta Quest; other sources (Muse, Polar heart-rate bands) come later. Made by Alma Digital Studio for the
-*Soul Charger* VR experience, but meant to send anything to anything: OSC, WebSocket, files.
+<p align="center">
+A desktop companion for the <b>PiEEG XR</b> face mask: receive, check, calibrate, see, record and send biosignals<br>
+to TouchDesigner, Unreal, Unity, Max, VRChat or a browser. Made for immersive and interactive art.<br>
+Developed by <a href="https://almadigitalstudio.com">Alma Digital Studio</a> · Windows · version 0.14 · MIT licence
+</p>
 
-Status: **0.13**: **Face › Mirror**, a face (Face Cap's facecap.glb, the one PiEEG's Face Trainer uses; licence not
-stated, internal use) that blinks, winks, raises the brows, opens the jaw, smiles and looks where the mask says, live;
-the same values go out as **ARKit blendshapes** (`arkit.*`) to drive any avatar rig.
-**0.12.1**: the ten sites placed as on the real PiEEG XR pad (five per side, none on the nose; the "centre" sites are the inner brow discs) and the **Alma prototype** electrode map, measured with a multimeter (Ref on the right outer brow disc, Bias on the lower right temple).
-**0.12**: everything for shows and installations: **markers and commands in** (OSC / UDP / WebSocket),
-**rules → events** (OSC, WebSocket, MIDI or webhook, with hold and cooldown), a **cue sheet**, **visitor mode**
-(presence, per-visitor baseline, safe outputs, a session per visitor, endless reconnect), **region outputs**, a
-**face joystick**, **MIDI out**, a **remote viewer** served by every WebSocket destination, **replay a session as
-the live source**, **BDF export**, **PiEEG compatibility** (their WebSocket on 1616 for their Unity plugin; VRChat
-parameters; PiEEG-style values) and lost-sample reporting. Face gestures checked line by line against PiEEG's Face
-Trainer v2; "ready" now needs two recordings and the other gestures count as negatives. Receivers in `receivers/`.
-**0.11**: a **guided tour** (Tour in the top bar: 21 steps over every page, the panel outlined and explained;
-offered once on the first run), an **About** box (Alma Digital Studio, contact, not a medical device, where the data
-goes, MIT licence and third-party licences; also `LICENSE` and `THIRD-PARTY-NOTICES.md`), inputs **not connected**
-in the electrode map (a mask with fewer discs: out of the head, the averages and the counts), the 3D head pads placed
-from the face's real midline, and **heart rate from the electrodes** (experimental; Home › Heart from: Auto / Strap /
-Electrodes; logged next to the strap's to validate it). Feature plan, with what PiEEG's docs add: `docs/PLAN-FEATURES.md`.
-**0.10** (after the first tests with the real PiEEG XR): an **editable electrode map** (Home › Electrodes; a mask can be wired differently from PiEEG's drawing, ours is), **contact per electrode** plus a **reference check** (a noisy reference no longer reads as eight bad electrodes), *railed* only at the converter limit, blinks from forehead − temples, an **average reference** option, and Bluetooth retries / reconnect / no-data warning. English quick start for other users: `docs/QUICKSTART.md`. **0.9**: a **Sessions** page (every saved session as lines over time with its marks, results and per-signal numbers, and a second session laid over it to compare); the routing table can be exported, imported and its mappings copied; fixes from a review (a measured tension range survives reconnecting, the simulator never overwrites a real face model, WebSocket refuses web pages from other sites and retries a taken port, steady send rate from the first tick). **0.8**: a **Face** page with what the mask reads from the face: **gestures** (record each one 2–3 times; a detector per gesture with the electrodes it uses, ported from PiEEG's Face Trainer), **gaze** left / centre / right from the EOG (9-dot calibration that reads each target against the centre around it, so electrode drift does not pass for a glance), **tension** of jaw and brow (muscle above 20 Hz, 0–1 against the person). New indices: **alpha asymmetry** and **beta surge**, and the result method **Recovery**. Routing sends by **WebSocket** too (JSON). All of it tested with the simulator only. **0.7**: per-person calibration (REST then a task, Cohen's d over every channel × band, ported from PiEEG's Avatar Foundation): `cal.score` reads 0 at the person's rest and 1 at their task, and the indices read against the calibration instead of the last minute. **0.4**: sessions with participant and notes, three files per session (raw, features at 10 Hz, summary), live results (signal × method: change vs start, mean, now, peak, time above) shown large and sent as `result1–3`. Previously **0.3**: Home (3D head cut at the neck, electrode pads coloured by contact), Live (waves, bands, spectrum, indices), Routing (generic OSC: any host, port, address, type), heart rate from ANT+ straps through the USB stick (Latido Común hardware) and from Bluetooth straps, sessions. UX notes in `docs/UX.md`. Roadmap in
-`VR Unreal/docs/EEG-ALMA-CENTER-INVESTIGACION-Y-PLAN.md` (§8).
+> **Not a medical device.** Research, art and play only. The numbers it shows (indices, heart rate, tension) are not
+> health measures. **Power the PiEEG box only from a battery** (a power bank, the headset's battery or a laptop running
+> on battery): never from a wall charger or a computer plugged into the mains while someone wears it.
 
-## Run
+![Home: the 3D head with the electrodes, contact per electrode and the reference check](docs/images/home.png)
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Get it running](#get-it-running)
+- [First session, step by step](#first-session-step-by-step)
+- [The electrode map](#the-electrode-map)
+- [Sending signals to other software](#sending-signals-to-other-software)
+- [Shows and installations](#shows-and-installations)
+- [Files and data](#files-and-data)
+- [For developers](#for-developers)
+- [Status and known limits](#status-and-known-limits)
+- [Documentation](#documentation)
+- [Credits and licence](#credits-and-licence)
+
+## What it does
+
+| Page | What is there |
+|---|---|
+| **Home** | Connect over Bluetooth (no drivers, no pairing). A 3D head with the electrodes where the mask has them, coloured by contact or by band. A checklist before recording. **Contact per electrode** (its own noise, not what all channels share) and a separate **reference check**. The editable **electrode map**. Heart rate from an ANT+ stick, a Bluetooth strap, or (experimental) the electrodes. **Visitor mode** for installations. Stream health, including samples lost on Bluetooth. |
+| **Live** | Bands over time, filtered waves, spectrum and 0–1 indices (calm, focus, relax, engagement, workload, fatigue, meditation, alpha asymmetry, beta surge). Filters: notch, 1–40 Hz, spike rejection (Hampel), average reference. **Personal calibration** (rest vs a task) so the indices read against this person. Up to three live **results** (change vs start, average, now, best 10 s…). |
+| **Face** | What the mask reads from the face: **gestures** trained by example (clench, jaw open, smile, brows up, frown, hard blink, winks, pucker), **gaze** left/right/up/down from the eye muscles (9-dot calibration), **jaw and brow tension**, and **Mirror**: a face that does all of it live. |
+| **Sessions** | Every recording with its notes and markers, its signals over time, a second session laid over it, **play a session as if live**, **export BDF**. |
+| **Routing** | Any signal to any address: **OSC**, **WebSocket** (each with a phone-friendly live viewer) or **MIDI**. **Rules** that fire events, a **cue sheet**, **markers coming in** from other software, and **compatibility with PiEEG's own tools** (their WebSocket for their Unity plugin, VRChat parameters). |
+
+**Tour** (top bar) walks through every panel in about two minutes; with no mask connected it runs the built-in simulator
+so each panel has something to show. **About** has the licences and the safety notes.
+
+![Live: bands and indices over the last minute, results on top](docs/images/live.png)
+
+## Get it running
+
+**Windows 10 or 11** with Bluetooth Low Energy.
+
+- **Installer or portable exe** (from Alma Digital Studio): `Pieeg-App-Setup-<version>.exe` installs it;
+  `Pieeg-App-<version>-portable.exe` runs without installing.
+- **From source** (Node.js 20 or newer):
 
 ```bash
+git clone https://github.com/beltranlihn/Alma_Pieeg_App.git
+cd Alma_Pieeg_App
 npm install
-npm start              # the app
-npm start -- --sim     # starts the built-in simulator at once
-npm test               # DSP, recorder, calibration, face, gaze, tension and WebSocket tests (node --test)
-npm run dist           # Windows installer + portable exe in dist/
+npm start                # the app
+npm start -- --sim       # the app with the simulator running (no mask needed)
+npm test                 # 67 tests (DSP, contact, map, detectors, router, WebSocket, BDF, rules…)
+npm run dist             # Windows installer + portable exe in dist/
 ```
 
-## Use
+The simulator also works from the app: **Home › Simulator**. In it, `B` blinks, `J` clenches, `←`/`→` look aside,
+`E` closes the eyes and `1`–`8` take an electrode off the skin.
 
-1. Power the PiEEG box **from a battery or from the headset** (never from a mains-powered PC while someone wears it).
-2. Put the mask on, press **Connect PiEEG**. The host picks the first `PiEEG_XR` / IronBCI it sees.
-3. Watch **Contact**: every channel should be green within a second. Grey = no contact, red = hum or railed (reference lost).
-4. On **Live**, type the participant's name, **Start session** (or `R`), drop marks with `M`, **End session**. Three files land in
-   `Documents/Pieeg App/sessions/` as `name_YYYYMMDD_HHMMSS.raw.csv` (`timestamp, ch1..ch8` raw µV, `mark`; PiEEG's
-   layout, so PiEEG Studio opens it), `.features.csv` (one row per 100 ms: bands, indices, blinks, heart, contact) and
-   `.summary.json` (participant, notes, duration, per-signal mean / start / end / min / max, the results).
-5. **Calibrate** (`C`, in the session bar) once the contact is green: 5 s to get ready, REST (eyes open, face relaxed), 5 s,
-   then the **active task** chosen in Live › Calibration (eyes closed, count backwards, jaw tense or your own cue), each phase
-   10 / 20 / 30 / 60 s. A tone marks every change, so it works with the eyes closed. The panel ranks the electrodes by how well
-   they tell the two apart (Cohen's d: strong ≥ 1.2, usable ≥ 0.8, marginal ≥ 0.4); the ticked ones drive `cal.score`
-   (0 = this person's rest, 1 = their task). Channels with bad contact during the recording are left out. While calibrated,
-   `idx.*` read 0–1 between the 5th and 95th percentile of the calibration instead of the last minute; *Reset* goes back.
-   The calibration is saved in the session summary (`calibrated`, `calibration`) and `cal_score` in the features CSV.
-6. **Results**: pick up to three (signal × method). *Change* compares the last 30 s with the first 30 s (±%), *Average*, *Now*,
-   *Best 10 s* and *Time above 60* read 0–100; *Recovery* is the median time (s) the signal takes to come back down after each
-   rise (use it with Beta surge). They show large above the Live views and go out as `result1`–`result3`.
-7. **Face** (the page between Live and Routing):
-   - *Gestures*: press **Record** on a gesture and follow the strip on top: rest, then the gesture, 3 times the first recording,
-     2 the second, 1 after that (PiEEG's 3-2-1). Readiness is the balanced accuracy on a cycle the detector had not seen
-     (ready from 0.85). The 8 cells show the electrodes the detector uses (group-lasso). Live: `face.<gesture>` 0–1 and
-     `face.<gesture>.on` with hysteresis (on 0.7, off 0.4). The detectors are saved in the config, not the recordings.
-   - *Gaze*: **G** runs 9 dots (23 s, head still). Then `gaze.x`, `gaze.y` (−1…1) and `gaze.side` (−1 / 0 / 1). The centre
-     follows slow drift while the eyes are near the middle; **0** recentres at once. Left / right is the dependable part.
-   - *Tension*: `tension.jaw` (temples) and `tension.brow` (forehead), 0–1 between the relaxed floor (10th percentile of the
-     last minute) and the highest level seen; *Relax, clench, brows · 15 s* measures the range instead. On above 0.6, off below 0.4.
-   Gesture recordings and the gaze dots are marked in the raw file when a session runs; the summary keeps what was trained.
+## First session, step by step
 
-8. **Sessions**: the saved sessions, newest first. Open one to see it whole: the signals as lines (pick them under the chart),
-   the marks in amber, the three results on top and start / end / change / mean / min / max per signal from the summary.
-   *Lay over* draws another session dashed from its own start, with its mean in the last column. Nothing on this page writes.
+1. **Power** the PiEEG box from a battery. Put the mask on.
+2. **Home › Connect PiEEG.** *Stream* should read 250 /s. If it says *connected, but no data*, unplug the box for
+   5 s and connect again (if it keeps happening, update its firmware: docs.pieeg.com › PiEEG XR › Service).
+3. **Electrode map:** Home › Electrodes › *Edit map*. Pick the preset that matches your mask (see below) and Apply.
+4. **Contact:** the *Ref* row should say *quiet* and each channel *good* or *fair*. If every channel looks alike and
+   Ref says *noisy*, the reference or bias disc is not touching: press them, a drop of saline helps.
+5. **Blink three times:** the checklist ticks the blink test.
+6. **Calibrate** (`C`): rest, then a task (eyes closed, counting…), 10–60 s each. The indices then read 0–1 for this
+   person.
+7. **Face:** record each gesture twice in *Gestures* (it says *ready* from the second recording when it is reliable),
+   run the 9 dots in *Gaze*, watch *Mirror*.
+8. **Start session** (`R`), drop markers with `M`, **End session**. The files land in `Documents\Pieeg App\sessions`.
 
-**Routing** destinations are *OSC · UDP* (send to host:port) or *WebSocket*: the app listens on host:port (`127.0.0.1` = this
-computer, `0.0.0.0` = the network) and every client gets `{"t": ms, "values": {"/address": value, …}}` at the destination's rate.
-Native clients (TouchDesigner, Unity, Unreal, Python) connect freely; a browser page only from this computer (file://, localhost),
-so a website cannot read the stream. *Export* / *Import* save and load the table as a file (import adds, never replaces);
-*Copy* duplicates a mapping.
+![Face › Mirror: a face driven by what the mask reads](docs/images/mirror.png)
 
-**Heart rate:** plug the Garmin ANT+ USB stick (WinUSB driver, as for Latido Común), press *Start ANT+ stick* on Home, put a strap on: it appears with its id; give it a slot. Slot 1 is the main heart (`heart.*` signals); every slot has `strapN.bpm` / `strapN.beat`.
+## The electrode map
 
-**Simulator** keys: `B` blink · `J` jaw clench · `←` `→` eye movement · `E` eyes closed (alpha up, a calibration target) · `1`–`8` toggle a bad contact on that channel.
-In the simulator the face protocols act themselves: it makes the gesture while the strip asks for it, follows the gaze dots
-and clenches or raises the brows for the tension range. Its muscle patterns are plausible, not measured.
-Self-tests (`--shot=out.png --quit-after=ms --probe=<urlencoded js>`): `--calib=10` (calibration), `--face=clench,brows_up`
-(records each twice), `--gaze` (the 9 dots), `--tension` (the range), `--wstest=8799` (a temporary WebSocket destination
-that is never saved), `--view=gaze` (opens that view). In simulator runs the face model is neither loaded nor saved.
+The PiEEG XR pad has **ten discs, five per side, none on the nose**: three along each brow (inner, middle, outer)
+and two down each temple. The board has ten inputs: **E1–E8**, **Ref** and **Bias**. Which input sits on which disc
+depends on how the mask is wired, so the app keeps it as a map (Home › Electrodes › Edit map). Everything that
+depends on position follows it: labels, the 3D head, blinks (forehead − temples), gaze (right − left temples), alpha
+asymmetry, tension, regions.
 
-## How it is built
+| Wearer's side → | Temple low | Temple up | Brow outer | Brow middle | Brow inner | | Brow inner | Brow middle | Brow outer | Temple up | Temple low |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **PiEEG XR documentation** | E1 | E2 | E3 | E4 | **Ref** | | **Bias** | E5 | E6 | E7 | E8 |
+| **Alma prototype** (multimeter, 2026-11-17) | E1 | E7 | E3 | E4 | E2 | | E6 | E5 | **Ref** | E8 | **Bias** |
 
-Plain Electron (no bundler), ES modules in the renderer, `contextIsolation` + sandbox, one preload bridge (`window.alma`).
-Design follows the VEATION design system (`assets/tokens.css`, Geist): grey surfaces, 1 px lines, amber only as a point.
+To check a mask: multimeter on continuity, one probe on the gold pad under each connector of the board (left to
+right: E1 … E8, Bias, Ref), the other on each disc until it beeps. An input that beeps on no disc can be set to
+*not connected*: it then stays out of every average, of the reference check and of the counts.
 
-| File | Role |
+## Sending signals to other software
+
+Add a **destination** and **mappings** (signal → address, input range → output range, smoothing, int/float, rate).
+
+| Destination | What the receiver gets |
 |---|---|
-| `main.js` | window, Web Bluetooth device chooser, session files, screenshot self-test (`--shot=path --quit-after=ms`) |
-| `src/ble.js` | PiEEG/IronBCI BLE protocol: notify `fe42`, 24 bytes per sample, 24-bit two's complement → µV |
-| `src/sim.js` | 8-channel simulator with blinks, jaw, eye movements, bad contacts |
-| `src/dsp.js` | Hampel (5, 3σ), Butterworth 1–40 Hz (4th order), notch 50/60 Hz, Goertzel; side chains for the face: wide band (1 Hz–Nyquist), muscle envelope (> 20 Hz), slow EOG (< 8 Hz) |
-| `src/ring.js` | ring buffers (raw + filtered) and the sample clock |
-| `src/quality.js` | contact status per channel from rms, mains hum and railing |
-| `src/scope.js` | the oscilloscope (Canvas 2D, 60 fps) with the XR Face electrode names |
-| `src/record.js` | CSV + JSON session recorder with marks |
-| `src/engine.js` | the pipeline: source → DSP → rings → features (bands, indices, blink, heart) |
-| `src/head.js` | 3D head (three.js) with the electrodes and the contact heat map |
-| `src/indices.js`, `src/fft.js`, `src/detect.js` | PiEEG-style indices, FFT and band powers, blink detector |
-| `src/signals.js`, `src/router.js`, `osc-encode.js` | the signal catalogue, the OSC router and the encoder |
-| `src/heart.js` | heart rate over the standard Bluetooth Heart Rate service |
-| `ant.js` | ANT+ heart-rate straps through a Garmin USB stick (main process, `ant-plus-next`); straps get slots 1–8 |
-| `src/session.js` | session log at 10 Hz, result methods, features CSV and summary JSON |
-| `src/calibrate.js`, `src/calview.js` | per-person calibration (PiEEG Avatar Foundation: Welford, Cohen's d, ranking) and its UI |
-| `src/face.js` | gestures (PiEEG Face Trainer): CAR, 5 features × 8 channels, L2 + group-lasso logistic per gesture, 3-2-1 protocol, leave-one-cycle-out |
-| `src/gaze.js` | gaze from EOG (PiEEG Eye Track): h = temples right − left, v = forehead − temples, 9 dots, 2×2 ridge, drift-following centre |
-| `src/tension.js` | jaw and brow tension from the muscle envelope (PiEEG artifact envelopes), self-setting or measured range |
-| `ws-server.js` | WebSocket server without dependencies (RFC 6455, text frames out, ping/close in) |
-| `src/tones.js` | the cue tones shared by every protocol |
-| `src/pages/*.js` | Home, Live, Face, Sessions, Routing |
-| `src/app.js` | wiring, config persistence (userData/config.json) |
+| **OSC · UDP** | One message per mapping: `/alma/calm 0.42`. Events (blinks, gestures) as ints. |
+| **WebSocket** | The app listens on `ws://<computer>:<port>`; each tick one JSON frame: `{"t": 1763390000000, "values": {"/alma/calm": 0.42, "/alma/blink": 1}}`. Open `http://<computer>:<port>/` in a browser (a phone on the same network too) for a **live viewer**. |
+| **MIDI** | A port of the computer (on Windows, a virtual one with loopMIDI). Address `cc 7` sends 0–127; `note 60` is on while the value is in the upper half. |
 
-Electrode map (PiEEG XR): Ch1–2 left temple (lower, upper) · Ch3–4 left forehead · Ch5–6 right forehead ·
-Ch7–8 right temple (upper, lower) · reference and bias at the centre of the forehead.
+**Signals** (the full list is in the Routing page): indices `idx.*` (0–1 for this person), relative and absolute
+bands, `cal.score`, alpha asymmetry, beta surge, per-channel amplitude/muscle/bands, **regions** (`region.lf.alpha`,
+`region.rt.emg`…), gestures `face.*` (probability and on/off), gaze `gaze.x/y/side`, tension `tension.jaw/brow`,
+the **face joystick** (`joy.x` gaze, `joy.y` brows up / jaw, `joy.press` hard blink), **ARKit blendshapes**
+`arkit.*` (27 of the 52 standard face-rig coefficients, to move an avatar in Unreal/MetaHuman, Unity or VRChat), blink
+pulse/count, heart (bpm, beat, HRV, source), contact, stream rate and loss, markers, rules, cues, visitor state,
+**PiEEG-style** band values `pieeg.*`, session results.
 
-## Credits
+**Ready-made receivers** in [`receivers/`](receivers/): TouchDesigner (OSC In CHOP, WebSocket DAT callbacks), Max
+(patch), Unity (WebSocket receiver, marker sender), Unreal (OSC Blueprint steps), Python (OSC, PiEEG WebSocket, markers).
 
-3D head: Lee Perry-Smith head scan by Infinite-Realities (CC-BY), as shipped with the three.js examples. three.js (MIT) is vendored in `assets/vendor`.
+**PiEEG compatibility** (Routing): their WebSocket on port **1616** (one frame per sample
+`{"t", "n", "channels": [8 µV]}`, their welcome message and their `start_record` / `stop_record` / `set_filter`
+commands), so **PiEEG's Unity plugin** (`com.pieeg.unity`) connects to this app unchanged; and the **VRChat** avatar
+parameters `/avatar/parameters/EEG_Delta … EEG_Gamma` to 127.0.0.1:9000.
 
-Protocol and the shape of the detectors follow PiEEG's open-source work (MIT): https://github.com/pieeg-club/PiEEG-server.
-Not a medical device. Research and art use only.
+## Shows and installations
+
+- **Markers and commands in** (UDP, 127.0.0.1:9001 by default; choose *The network* to accept them from a headset):
+  `/alma/mark "scene 2"` stamps a marker in the recording and sends `marker.pulse` out; `/alma/session/start "name"`,
+  `/alma/session/stop`, `/alma/calibrate`, `/alma/cues/start`, `/alma/cues/stop` drive the app. Any plain-text UDP
+  datagram, or `{"mark": "…"}` over a WebSocket port, is a marker too.
+- **Rules:** "calm above 0.7 for 5 s → send /lights/fade", once per crossing, with a cooldown. To an OSC address, a
+  WebSocket event, a MIDI note or an HTTP POST (webhook) with `{rule_id, rule_name, trigger_type, value, threshold, ts}`.
+- **Cue sheet:** timed messages from the start of each session (or Run), each fired once and marked in the recording.
+- **Visitor mode** (Home): notices the mask going on (contact for 3 s) and off (5 s without); each visitor starts fresh
+  and settles for 30–60 s; meanwhile, and between visitors, continuous outputs ease to zero, the middle or their last
+  value. Optional: one session per visitor. Bluetooth keeps reconnecting while it is on.
+- **Play a session as if live** (Sessions): rehearse a patch, tune rules or show a piece without anyone wearing the mask.
+
+## Files and data
+
+Everything stays on the computer: nothing is sent online; signals leave only to the destinations set in Routing.
+
+| What | Where |
+|---|---|
+| Recordings | `Documents\Pieeg App\sessions\<participant>_<YYYYMMDD_HHMMSS>.*` |
+| `.raw.csv` | `timestamp, ch1…ch8, mark`: Unix seconds, raw µV (DC included), the same layout as PiEEG's own recordings |
+| `.features.csv` | one row every 100 ms: bands, indices, blinks, gestures, gaze, tension, heart, contact, markers… |
+| `.summary.json` | participant, notes, duration, per-signal mean/start/end/min/max, results, calibration, face models, marks |
+| `.bdf` | on demand (Sessions › Export): BDF+, 24-bit like the converter, marks as annotations; opens in MNE (`mne.io.read_raw_bdf`), EEGLAB, EDFbrowser, PiEEG Studio |
+| Settings | `%APPDATA%\Pieeg App\config.json`: routing, electrode map, face models, rules, cues, visitor mode, view options |
+| Routing files | Routing › Export / Import (JSON), to carry a setup to another computer |
+
+A recording holds the participant's name and notes as typed: ask people before recording them, and delete their files
+when asked. The app was called *EEG Alma Center* until 0.14; on its first start the new version copies the old
+settings and renames `Documents\EEG Alma Center` to `Documents\Pieeg App`.
+
+## For developers
+
+Plain Electron 44, no bundler: ES modules in the renderer, `contextIsolation` + sandbox, one preload bridge
+(`window.alma`). Web Bluetooth with a device chooser in the main process. Design: the VEATION system
+(`assets/tokens.css`, Geist).
+
+| Where | What |
+|---|---|
+| `main.js`, `preload.js` | window, Bluetooth chooser, files, OSC sockets, WebSocket listeners, UDP input, self-test harness |
+| `src/ble.js`, `src/sim.js`, `src/replay.js` | the sources: PiEEG XR over BLE (notify `fe42`, 24 bytes per sample, 24-bit → µV), the simulator, a saved session |
+| `src/engine.js`, `src/dsp.js`, `src/ring.js` | the pipeline: source → filters → ring buffers → features at 20 Hz |
+| `src/quality.js`, `src/montage.js` | contact per electrode and the reference check; the electrode map and its groups |
+| `src/fft.js`, `src/indices.js`, `src/calibrate.js` | bands, PiEEG-style indices, per-person calibration (Cohen's d) |
+| `src/detect.js`, `src/face.js`, `src/gaze.js`, `src/tension.js`, `src/arkit.js` | blinks, gestures (Face Trainer: group-lasso logistic), EOG gaze, muscle tension, ARKit mapping |
+| `src/heart.js`, `src/heartest.js`, `ant.js` | Bluetooth and ANT+ heart rate; the experimental estimate from the electrodes |
+| `src/signals.js`, `src/router.js`, `src/midi.js`, `osc-encode.js`, `ws-server.js` | the signal catalogue and the outputs |
+| `src/inputs.js`, `src/rules.js`, `src/cues.js`, `src/visitor.js`, `src/compat.js` | markers in, rules, cue sheet, visitor mode, PiEEG compatibility |
+| `src/record.js`, `src/session.js`, `src/bdf.js` | recording, session log and results, BDF export |
+| `src/head.js`, `src/facemirror.js`, `src/scope.js`, `src/spectrum.js` | the 3D head, the Mirror face, the waves, the spectrum |
+| `src/pages/*.js`, `src/tour.js`, `src/about.js` | the five pages, the guided tour, About |
+| `tests/` | `node --test`: 67 tests |
+| `tools/make-icon.py` | draws the app icon (ico, png, svg) |
+
+**Self-test harness** (used for every change): `npx electron . --sim --page=<page> --view=<view> --size=1400x900
+--quit-after=6000 --shot=out.png --probe=<url-encoded JS>` captures the window and prints what the probe returns.
+Also `--tour=<step>`, `--face=<gesture,…>`, `--gaze`, `--tension`, `--calib=<s>`, `--wstest=<port>`, `--connect`.
+
+## Status and known limits
+
+- **Tested** with the simulator, the test suite and external OSC/WebSocket/Python clients. **With the real mask**:
+  connection, contact, the reference check, blinks and recordings (first tests 2026-11-17). Gestures, gaze, Mirror and
+  the show features still need a pass with the mask on.
+- **Bluetooth** drops when the head or body is between the box and the computer; keep the box in line of sight. The
+  board can stay "connected but silent" after a drop until it is unplugged.
+- **Heart from the electrodes** is experimental: it says a number only when the rhythm is clear, and in the first real
+  recordings it mostly did not. Record with a strap on too to compare (both are logged).
+- **Smile and pucker** are far from the electrodes: expect them weak.
+- **Not yet:** LSL output (needs the native liblsl), P300 and trained mental commands (forehead dry electrodes).
+- The **Mirror face** (`assets/models/facecap.glb`, Face Cap by Bannaflak, from the three.js examples) has no stated
+  licence: confirm it before any commercial or public release, or swap in another ARKit face.
+
+## Documentation
+
+- [`docs/QUICKSTART.md`](docs/QUICKSTART.md): the short guide for PiEEG XR users.
+- [`docs/PLAN-FEATURES.md`](docs/PLAN-FEATURES.md): the feature plan and what is done.
+- [`docs/CHANGELOG.md`](docs/CHANGELOG.md): what each version added.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): history, first real tests, next steps.
+- [`receivers/README.md`](receivers/README.md): receiving in TouchDesigner, Max, Unity, Unreal, Python.
+- [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md): what ships inside and under which licence.
+- PiEEG XR: [docs.pieeg.com](https://docs.pieeg.com/hardware/devices/PiEEG_XR/).
+
+## Credits and licence
+
+**Pieeg App** is free software under the [MIT licence](LICENSE), © 2026 Alma Digital Studio.
+
+Built on the open-source work of the **PiEEG Community** (PiEEG-server and pieeg.js, MIT): the BLE protocol, the
+indices, and the shape of the gesture, gaze, calibration and artifact detectors are ported from it. Also inside:
+Electron (MIT), three.js (MIT), the Lee Perry-Smith head scan (CC BY 3.0, Infinite-Realities), Geist (OFL 1.1) and
+facecap.glb (licence not stated). Details in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+
+PiEEG and PiEEG XR are made by PiEEG. ANT+ is a trademark of Garmin Canada Inc. Their mention does not mean they
+endorse this app.
